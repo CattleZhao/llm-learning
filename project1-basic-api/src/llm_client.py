@@ -3,6 +3,7 @@ import os
 from typing import Optional
 from openai import OpenAI
 from anthropic import Anthropic
+from zhipuai import ZhipuAI
 
 class LLMClientBase:
     """LLM客户端基类"""
@@ -58,11 +59,37 @@ class AnthropicClient(LLMClientBase):
         except Exception as e:
             raise Exception(f"Anthropic API error: {e}")
 
+class GLMClient(LLMClientBase):
+    """智谱AI (z.ai) 客户端"""
+    def __init__(self, api_key: Optional[str] = None):
+        api_key = api_key or os.getenv("ZHIPUAI_API_KEY")
+        if not api_key:
+            raise ValueError("ZhipuAI API key is required")
+        super().__init__(api_key)
+        self.client = ZhipuAI(api_key=api_key)
+
+    def generate(self, prompt: str, temperature: float = 0.7,
+                 max_tokens: int = 2000) -> str:
+        """生成文本"""
+        try:
+            response = self.client.chat.completions.create(
+                model="glm-4-flash",  # 使用较快的模型
+                messages=[{"role": "user", "content": prompt}],
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            raise Exception(f"ZhipuAI API error: {e}")
+
 def get_client(provider: str = "openai") -> LLMClientBase:
     """工厂函数：获取LLM客户端"""
     providers = {
         "openai": OpenAIClient,
-        "anthropic": AnthropicClient
+        "anthropic": AnthropicClient,
+        "glm": GLMClient,
+        "zhipu": GLMClient,  # 别名
+        "zhipuai": GLMClient,  # 别名
     }
     if provider not in providers:
         raise ValueError(f"Unknown provider: {provider}")
