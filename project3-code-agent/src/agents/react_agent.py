@@ -6,41 +6,12 @@ from typing import Dict, List, Any, Optional, Callable
 from pathlib import Path
 import sys
 
-# 添加project2到路径以导入EmbeddingModel和VectorStore
-project2_path = Path(__file__).parent.parent.parent.parent / "project2-rag-system" / "src"
-if str(project2_path) not in sys.path:
-    sys.path.insert(0, str(project2_path))
-
-# 导入project2的模块（需要处理相对导入问题）
-import importlib.util
-
-def import_project2_module(module_name, file_path):
-    """动态导入project2的模块"""
-    spec = importlib.util.spec_from_file_location(module_name, file_path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
-
-# 导入EmbeddingModel
-embeddings_path = project2_path / "embeddings.py"
-embeddings_module = import_project2_module("project2_embeddings", embeddings_path)
-EmbeddingModel = embeddings_module.EmbeddingModel
-
-# 导入VectorStore（需要先设置src模块）
-import types
-src_module = types.ModuleType("src")
-src_module.__path__ = [str(project2_path)]
-sys.modules["src"] = src_module
-sys.modules["src.embeddings"] = embeddings_module
-vector_store_path = project2_path / "vector_store.py"
-vector_store_module = import_project2_module("project2_vector_store", vector_store_path)
-VectorStore = vector_store_module.VectorStore
-
-# 导入LLM客户端
-llm_client_path = project2_path / "llm_client.py"
-llm_client_module = import_project2_module("project2_llm_client", llm_client_path)
-SimpleLLMClient = llm_client_module.SimpleLLMClient
+# 从项目内模块导入
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from llm_client import SimpleLLMClient
+from embeddings import EmbeddingModel
+from vector_store import VectorStore
+from document_loader import Document
 
 # 导入工具
 sys.path.insert(0, str(Path(__file__).parent.parent / "tools"))
@@ -431,11 +402,6 @@ Thought:"""
 
     def _save_to_memory(self, query: str, answer: str):
         """保存对话到记忆"""
-        # 导入Document类
-        doc_loader_path = project2_path / "document_loader.py"
-        doc_loader_module = import_project2_module("project2_document_loader", doc_loader_path)
-        Document = doc_loader_module.Document
-
         doc = Document(
             page_content=f"问题: {query}\n答案: {answer}",
             metadata={"type": "qa_pair"}
