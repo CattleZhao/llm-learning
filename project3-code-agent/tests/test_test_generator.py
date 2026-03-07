@@ -252,10 +252,11 @@ def test_add():
     pass
 '''
         result = self.generator.check_test_coverage(test_code=test_code)
+        actual_result = result.get('result', result)
 
-        assert 'uncovered_functions' in result
+        assert 'uncovered_functions' in actual_result
         # add被测试了，所以不应该在uncovered中
-        assert 'add' not in result.get('uncovered_functions', [])
+        assert 'add' not in actual_result.get('uncovered_functions', [])
 
     def test_check_test_coverage_recommendations(self):
         """测试覆盖率建议"""
@@ -264,33 +265,37 @@ def test_add():
     pass
 '''
         result = self.generator.check_test_coverage(test_code=test_code)
+        actual_result = result.get('result', result)
 
-        assert 'recommendations' in result
-        assert isinstance(result['recommendations'], list)
+        assert 'recommendations' in actual_result
+        assert isinstance(actual_result['recommendations'], list)
 
     def test_generate_all_tests(self):
         """测试为所有函数生成测试"""
         result = self.generator.generate_all_tests()
+        actual_result = result.get('result', result)
 
-        assert 'test_code' in result
-        assert 'functions_tested' in result
-        assert 'total_tests' in result
-        assert len(result['functions_tested']) > 0
-        assert result['total_tests'] >= 0
+        assert 'test_code' in actual_result
+        assert 'functions_tested' in actual_result
+        assert 'total_tests' in actual_result
+        assert len(actual_result['functions_tested']) > 0
+        assert actual_result['total_tests'] >= 0
 
     def test_get_function_info(self):
         """测试获取函数详细信息"""
         result = self.generator.get_function_info('add')
+        actual_result = result.get('result', result)
 
-        assert result['name'] == 'add'
-        assert 'args' in result
-        assert 'docstring' in result
+        assert actual_result['name'] == 'add'
+        assert 'args' in actual_result
+        assert 'docstring' in actual_result
 
     def test_get_function_info_nonexistent(self):
         """测试获取不存在函数的信息"""
         result = self.generator.get_function_info('nonexistent')
+        actual_result = result.get('result', result)
 
-        assert 'error' in result
+        assert 'error' in actual_result
 
     def test_tool_decorator(self):
         """测试tool装饰器"""
@@ -349,7 +354,8 @@ def test_add():
     def test_edge_case_test_code_format(self):
         """测试边界测试代码格式"""
         result = self.generator.generate_edge_cases('add')
-        test_code = result['test_code']
+        actual_result = result.get('result', result)
+        test_code = actual_result['test_code']
 
         assert 'import pytest' in test_code
         assert '@pytest.mark.parametrize' in test_code
@@ -384,20 +390,28 @@ def test_add():
 
         gen = TestGenerator(file_path=str(source_file))
         result = gen.check_test_coverage(test_file_path=str(test_file))
+        actual_result = result.get('result', result)
 
-        assert 'coverage_rate' in result
+        assert 'coverage_rate' in actual_result
 
 
 class TestTestGeneratorEdgeCases:
     """TestGenerator边界情况测试"""
 
     def test_empty_source_code(self):
-        """测试空源代码"""
-        with pytest.raises(ValueError, match="代码解析失败"):
+        """测试空源代码 - 空字符串被当作falsy所以触发第一个验证"""
+        with pytest.raises(ValueError, match="必须提供source_code或file_path"):
             TestGenerator(source_code="")
+
+    def test_invalid_source_code(self):
+        """测试无效源代码"""
+        with pytest.raises(ValueError, match="代码解析失败"):
+            TestGenerator(source_code="def foo(\n")  # 不完整的函数
 
     def test_invalid_syntax(self):
         """测试无效语法"""
+        # 空字符串在当前实现中被当作没有提供source_code
+        # 所以这里测试一个非空但语法错误的代码
         with pytest.raises(ValueError, match="代码解析失败"):
             TestGenerator(source_code="def foo(\n")  # 不完整的函数
 
@@ -409,8 +423,9 @@ def no_args():
 '''
         gen = TestGenerator(source_code=code)
         result = gen.generate_test('no_args')
+        actual_result = result.get('result', result)
 
-        assert result['success'] == True
+        assert actual_result['success'] == True
 
     def test_function_with_optional_params(self):
         """测试带有可选参数的函数"""

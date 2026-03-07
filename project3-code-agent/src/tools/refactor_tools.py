@@ -5,7 +5,17 @@ import re
 from typing import Dict, List, Any, Optional
 from functools import wraps
 
-from src.llm_client import SimpleLLMClient
+try:
+    from ..llm_client import SimpleLLMClient
+except ImportError:
+    try:
+        from llm_client import SimpleLLMClient
+    except ImportError:
+        # Fallback for direct execution
+        import sys
+        import os
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+        from llm_client import SimpleLLMClient
 
 
 def tool(func):
@@ -54,7 +64,14 @@ class RefactorTools:
             raise ValueError(f"代码解析失败: {e}")
 
         self.lines = self.source_code.split('\n')
-        self.llm_client = llm_client or SimpleLLMClient()
+        self._llm_client = llm_client  # Can be None for non-LLM operations
+
+    @property
+    def llm_client(self):
+        """Lazy load LLM client only when needed"""
+        if self._llm_client is None:
+            self._llm_client = SimpleLLMClient()
+        return self._llm_client
 
     @tool
     def check_code_smells(self) -> Dict[str, List[Dict[str, Any]]]:
@@ -312,7 +329,8 @@ class RefactorTools:
             包含重构建议的字典
         """
         # 首先检测代码异味
-        code_smells = self.check_code_smells()
+        code_smells_result = self.check_code_smells()
+        code_smells = code_smells_result['result']  # 提取@tool包装后的实际结果
 
         # 构建提示词
         prompt = self._build_refactor_prompt(code_smells, focus_area)
@@ -494,7 +512,8 @@ class RefactorTools:
         Returns:
             按优先级排序的重构任务列表
         """
-        code_smells = self.check_code_smells()
+        code_smells_result = self.check_code_smells()
+        code_smells = code_smells_result['result']  # 提取@tool包装后的实际结果
 
         priority_items = []
 

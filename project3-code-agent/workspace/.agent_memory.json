@@ -1,0 +1,35 @@
+{
+  "project_info": {
+    "name": "test_project",
+    "language": "Python"
+  },
+  "file_summaries": {
+    "test.py": {
+      "summary": {
+        "functions": 5,
+        "classes": 1,
+        "lines": 100
+      },
+      "last_analyzed": "2026-03-06T10:40:15.711064"
+    }
+  },
+  "analysis_history": [
+    {
+      "type": "code_analysis",
+      "file": "test.py",
+      "result": {
+        "complexity": "low"
+      },
+      "timestamp": "2026-03-06T10:40:15.711333"
+    }
+  ],
+  "user_preferences": {},
+  "learnings": [
+    {
+      "topic": "AST",
+      "content": "Python的ast模块用于解析代码结构",
+      "timestamp": "2026-03-06T10:40:15.711827"
+    }
+  ],
+  "last_updated": "2026-03-06T10:40:15.711833"
+}

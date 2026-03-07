@@ -27,7 +27,12 @@ embeddings_path = project2_path / "embeddings.py"
 embeddings_module = import_project2_module("project2_embeddings", embeddings_path)
 EmbeddingModel = embeddings_module.EmbeddingModel
 
-# 导入VectorStore
+# 导入VectorStore（需要先设置src模块）
+import types
+src_module = types.ModuleType("src")
+src_module.__path__ = [str(project2_path)]
+sys.modules["src"] = src_module
+sys.modules["src.embeddings"] = embeddings_module
 vector_store_path = project2_path / "vector_store.py"
 vector_store_module = import_project2_module("project2_vector_store", vector_store_path)
 VectorStore = vector_store_module.VectorStore
@@ -426,7 +431,10 @@ Thought:"""
 
     def _save_to_memory(self, query: str, answer: str):
         """保存对话到记忆"""
-        from document_loader import Document
+        # 导入Document类
+        doc_loader_path = project2_path / "document_loader.py"
+        doc_loader_module = import_project2_module("project2_document_loader", doc_loader_path)
+        Document = doc_loader_module.Document
 
         doc = Document(
             page_content=f"问题: {query}\n答案: {answer}",
