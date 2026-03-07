@@ -273,14 +273,35 @@ Thought:"""
                 history=history
             )
 
+            if verbose:
+                print(f"\n{'─'*60}")
+                print("【发送给 LLM 的提示词】")
+                print(f"{'─'*60}")
+                print(prompt)
+                print(f"{'─'*60}")
+
             # 获取LLM响应
             response = self.llm_client.generate(prompt, temperature=0.3)
 
             if verbose:
-                print(f"\nLLM响应:\n{response}\n")
+                print(f"\n{'─'*60}")
+                print("【LLM 返回的响应】")
+                print(f"{'─'*60}")
+                print(response)
+                print(f"{'─'*60}")
 
             # 解析响应
             thought, action, action_input, final_answer = self._parse_response(response)
+
+            if verbose:
+                print(f"\n{'─'*60}")
+                print("【解析结果】")
+                print(f"{'─'*60}")
+                print(f"Thought: {thought}")
+                print(f"Action: {action}")
+                print(f"Action Input: {action_input}")
+                print(f"Final Answer: {final_answer}")
+                print(f"{'─'*60}")
 
             # 检查是否有最终答案
             if final_answer:
