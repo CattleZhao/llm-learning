@@ -37,11 +37,31 @@ class LangChainCodeAgent:
         self.tools = get_all_tools()
 
         # 创建 Agent
-        from langchain.agents import create_react_agent
-        from langchain import hub
+        from langchain.agents import create_react_agent, AgentExecutor
+        from langchain_core.prompts import PromptTemplate
 
-        # 获取标准 ReAct prompt 模板
-        self.prompt = hub.pull("hwchase17/react")
+        # 定义 ReAct prompt 模板（不依赖 hub）
+        REACT_TEMPLATE = """Answer the following questions as best you can. You have access to the following tools:
+
+{tools}
+
+Use the following format:
+
+Question: the input question you must answer
+Thought: you should always think about what to do
+Action: the action to take, should be one of [{tool_names}]
+Action Input: the input to the action
+Observation: the result of the action
+... (this Thought/Action/Action Input/Observation can repeat N times)
+Thought: I now know the final answer
+Final Answer: the final answer to the original input question
+
+Begin!
+
+Question: {input}
+Thought:{agent_scratchpad}"""
+
+        self.prompt = PromptTemplate.from_template(REACT_TEMPLATE)
 
         # 创建 ReAct Agent
         self.agent = create_react_agent(
@@ -51,8 +71,6 @@ class LangChainCodeAgent:
         )
 
         # 创建 Agent 执行器
-        from langchain.agents import AgentExecutor
-
         self.agent_executor = AgentExecutor(
             agent=self.agent,
             tools=self.tools,
