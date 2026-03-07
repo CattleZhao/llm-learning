@@ -27,7 +27,11 @@ class CodeAssistantCLI:
         """
         self.agent = CodeAssistantAgent(workspace_dir)
         self.running = True
-        self.workspace_dir = workspace_dir or str(Path.cwd() / "workspace")
+        # 统一使用项目根目录下的workspace
+        if not workspace_dir:
+            self.workspace_dir = str(Path(__file__).parent.parent / "workspace")
+        else:
+            self.workspace_dir = workspace_dir
 
         print("=" * 60)
         print("        代码助手 Agent - CLI")

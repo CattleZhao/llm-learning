@@ -26,11 +26,12 @@ class ProjectMemory:
         if workspace_dir:
             self.workspace_dir = Path(workspace_dir)
         else:
-            # 默认使用当前目录下的workspace
+            # 默认使用项目根目录下的workspace
             self.workspace_dir = Path(__file__).parent.parent.parent / "workspace"
 
         self.memory_file = self.workspace_dir / memory_file
-        self.memory_file.parent.mkdir(parents=True, exist_ok=True)
+        # 确保workspace目录存在
+        self.workspace_dir.mkdir(parents=True, exist_ok=True)
 
         self.data: Dict[str, Any] = {
             "project_info": {},
