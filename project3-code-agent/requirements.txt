@@ -4,5 +4,8 @@ openai>=1.0.0
 # Environment variable management
 python-dotenv>=1.0.0
 
+# Numerical computing (required by project2 modules)
+numpy>=1.0.0
+
 # Testing framework
 pytest>=7.0.0
