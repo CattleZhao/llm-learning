@@ -70,34 +70,31 @@ Thought:{agent_scratchpad}"""
             prompt=self.prompt
         )
 
-        # 创建 Agent 执行器
+        # 创建 LangChain 记忆组件
+        from langchain.memory import ConversationBufferMemory
+
+        self.memory = ConversationBufferMemory(
+            memory_key="chat_history",
+            return_messages=True
+        )
+
+        # 创建 Agent 执行器（带记忆）
         self.agent_executor = AgentExecutor(
             agent=self.agent,
             tools=self.tools,
             verbose=True,
             max_iterations=10,
             handle_parsing_errors=True,
-            return_intermediate_steps=False
+            return_intermediate_steps=False,
+            memory=self.memory  # 关键：传入记忆组件
         )
 
-        # 记忆（用于非 Agent 模式的功能）
-        self.conversation_memory = ConversationMemory()
-        self.project_memory = ProjectMemory(workspace_dir)
-        self.current_file = None
-
-        # 系统提示词（用于直接调用模式）
-        self.system_prompt = """你是一个专业的代码分析助手，具备以下能力：
-
-1. 代码结构分析 - 分析函数、类、导入等代码结构
-2. 代码质量评估 - 评估复杂度、可读性等
-3. 测试用例生成 - 为函数自动生成测试代码
-4. 重构建议 - 提供代码改进建议
-
-请使用工具获取信息后，给出清晰、有价值的分析结果。"""
+        # 对话历史记录（手动管理）
+        self.chat_history = []  # 存储 {"role": "user"/"assistant", "content": "..."}
 
     def chat(self, user_input: str) -> str:
         """
-        通过 Agent 处理用户输入
+        通过 Agent 处理用户输入（支持多轮对话）
 
         Args:
             user_input: 用户输入
@@ -106,8 +103,25 @@ Thought:{agent_scratchpad}"""
             Agent 回复
         """
         try:
-            result = self.agent_executor.invoke({"input": user_input})
-            return result.get("output", "未能获取回复")
+            # 构建包含历史对话的输入
+            if self.chat_history:
+                # 如果有历史记录，添加到输入中
+                history_text = "\n\n".join([
+                    f"{msg['role']}: {msg['content']}"
+                    for msg in self.chat_history[-4:]  # 只保留最近4轮
+                ])
+                full_input = f"之前的对话:\n{history_text}\n\n当前问题: {user_input}"
+            else:
+                full_input = user_input
+
+            result = self.agent_executor.invoke({"input": full_input})
+            response = result.get("output", "未能获取回复")
+
+            # 记录到历史
+            self.chat_history.append({"role": "user", "content": user_input})
+            self.chat_history.append({"role": "assistant", "content": response})
+
+            return response
         except Exception as e:
             return f"执行出错: {str(e)}"
 
@@ -264,5 +278,6 @@ Thought:{agent_scratchpad}"""
 
     def clear_conversation(self):
         """清空对话历史"""
+        self.chat_history = []
         self.conversation_memory.clear()
         self.conversation_memory.add_system_message(self.system_prompt)

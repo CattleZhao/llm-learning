@@ -53,7 +53,7 @@ class Config:
         """
         获取 AutoGen 需要的 LLM 配置字典
 
-        AutoGen 0.2.x 要求的格式：
+        AutoGen 0.1.x - 0.2.x 使用的格式：
         {
             "config_list": [{"model": ..., "api_key": ..., "base_url": ...}],
             "temperature": ...,
@@ -71,7 +71,7 @@ class Config:
                 }
             ],
             "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
+            "cache_seed": None,  # 禁用缓存以获得最新的响应
         }
 
     def get_code_execution_config(self) -> Dict[str, Any]:
