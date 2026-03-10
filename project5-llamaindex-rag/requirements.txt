@@ -1,0 +1,19 @@
+# LlamaIndex 核心
+llama-index-core>=0.10.0
+llama-index-readers-file>=0.1.0
+llama-index-vector-stores-chroma>=0.1.0
+llama-index-llms-anthropic>=0.1.0
+llama-index-embeddings-ollama>=0.1.0
+
+# 向量数据库
+chromadb>=0.4.0
+
+# Web UI
+streamlit>=1.28.0
+
+# 环境变量
+python-dotenv>=1.0.0
+
+# 测试
+pytest>=7.4.0
+pytest-mock>=3.12.0
