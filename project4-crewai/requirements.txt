@@ -1,0 +1,25 @@
+# Core Framework
+crewai>=1.10.0
+langchain>=0.3.0
+langchain-anthropic>=0.2.0
+
+# LLM Provider
+anthropic>=0.40.0
+
+# Web UI
+streamlit>=1.28.0
+
+# CLI
+typer>=0.12.0
+rich>=13.0.0
+
+# Environment
+python-dotenv>=1.0.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0
+
+# Utilities
+tenacity>=8.2.0
