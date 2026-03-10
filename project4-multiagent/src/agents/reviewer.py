@@ -3,7 +3,7 @@ Reviewer Agent 模块
 
 Reviewer 负责确保代码质量，检查代码是否符合最佳实践。
 """
-from typing import Optional
+from typing import Optional, Callable
 from autogen import AssistantAgent
 from src.core.config import Config
 from src.utils.logger import get_logger
@@ -41,6 +41,7 @@ def create_reviewer(
     config: Config,
     name: str = "reviewer",
     system_message: Optional[str] = None,
+    is_termination_msg: Optional[Callable[[dict], bool]] = None,
 ) -> AssistantAgent:
     """
     创建一个 Reviewer agent
@@ -51,6 +52,7 @@ def create_reviewer(
         config: 配置对象
         name: Agent 名称
         system_message: 自定义系统消息（如果不提供则使用默认）
+        is_termination_msg: 判断是否终止的函数（接收消息字典）
 
     Returns:
         配置好的 AssistantAgent 实例
@@ -60,15 +62,18 @@ def create_reviewer(
     if system_message is None:
         system_message = REVIEWER_SYSTEM_MESSAGE
 
-    # 获取模型配置
-    model_config = config.get_model_config()
+    # 默认终止消息检测
+    if is_termination_msg is None:
+        def is_termination_msg(msg: dict) -> bool:
+            content = msg.get("content", "")
+            return "TERMINATE" in content.upper() or "APPROVED" in content.upper()
 
-    # 创建 Agent，使用新的 API
+    # 创建 Agent，使用 LLM 配置
     agent = AssistantAgent(
         name=name,
         system_message=system_message,
-        model_client=model_config['model_client'],
-        temperature=model_config.get('temperature'),
+        llm_config=config.get_llm_config(),
+        is_termination_msg=is_termination_msg,
     )
 
     logger.info(f"Reviewer agent '{name}' created successfully")

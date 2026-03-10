@@ -32,14 +32,14 @@ pip install -r requirements.txt
 ```
 
 **依赖列表：**
-- `pyautogen==0.10.0` - AutoGen 多 Agent 框架
+- `pyautogen==0.4` - AutoGen 多 Agent 框架（兼容 Python 3.13）
 - `openai>=1.0.0` - OpenAI API 客户端
 - `python-dotenv>=1.0.0` - 环境变量管理
 - `streamlit>=1.28.0` - Web 界面框架
 - `pytest>=7.4.0` - 测试框架
 - `rich>=13.0.0` - 彩色终端输出
 
-**注意：** 本项目使用 pyautogen 0.10.0，API 与早期版本有重大变化。
+**注意：** 本项目使用 pyautogen 0.4 以支持 Python 3.13。
 
 ### 4. 配置环境变量
 

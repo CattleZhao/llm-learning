@@ -2,7 +2,7 @@
 
 本文档详细说明 Project 4 的技术架构和实现细节。
 
-**注意：本版本使用 pyautogen 0.10.0，API 与早期版本有重大差异。**
+**注意：本版本使用 pyautogen 0.4 以支持 Python 3.13。**
 
 ---
 
@@ -55,7 +55,7 @@
 ┌────────────────▼────────────────────────────────────────────┐
 │                    外部服务层                                │
 ├─────────────────────────────────────────────────────────────┤
-│  AutoGen 0.10.0  │  OpenAI API  │  文件系统  │  Docker(可选)│
+│  AutoGen 0.4  │  OpenAI API  │  文件系统  │  Docker(可选)│
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -87,45 +87,24 @@ class Config:
     use_docker: bool
     work_dir: str
 
-    def get_model_config(self) -> dict:
-        """返回 AutoGen 0.10.0 需要的模型配置
-        使用 OpenAIChatCompletionClient"""
-        from autogen.ext.models.openai import OpenAIChatCompletionClient
-        model_client = OpenAIChatCompletionClient(
-            model=self.model,
-            api_key=self.api_key,
-            base_url=self.api_base if self.api_base != 'https://api.openai.com/v1' else None,
-        )
+    def get_llm_config(self) -> Dict[str, Any]:
+        """返回 AutoGen 需要的 LLM 配置"""
         return {
-            'model_client': model_client,
-            'temperature': self.temperature,
-            'max_tokens': self.max_tokens,
+            "config_list": [{"model": ..., "api_key": ..., "base_url": ...}],
+            "temperature": ...,
         }
 
-    def get_code_execution_config(self) -> dict:
-        """返回代码执行配置
-        使用 CommandLineCodeExecutor 或 DockerCommandLineCodeExecutor"""
-        from autogen.coding import CodeBlock, DockerCommandLineCodeExecutor, CommandLineCodeExecutor
-
-        if self.use_docker:
-            executor = DockerCommandLineCodeExecutor(work_dir=self.work_dir)
-        else:
-            executor = CommandLineCodeExecutor(work_dir=self.work_dir)
-
+    def get_code_execution_config(self) -> Dict[str, Any]:
+        """返回代码执行配置"""
         return {
-            'code_executor': executor,
-            'use_docker': self.use_docker,
+            "work_dir": self.work_dir,
+            "use_docker": self.use_docker,
         }
 ```
 
 **设计模式:**
 - **单例模式**: `get_config()` 函数确保全局只有一个配置实例
 - **Dataclass**: 使用 Python dataclass 简化配置类定义
-
-**pyautogen 0.10.0 变化:**
-- `get_llm_config()` → `get_model_config()`
-- 返回 `model_client` 对象而非配置字典
-- 使用 `OpenAIChatCompletionClient` 替代配置列表
 
 ---
 
@@ -337,79 +316,11 @@ response.messages  # 列表格式
 
 | 依赖 | 版本 | 用途 |
 |------|------|------|
-| `pyautogen` | ==0.10.0 | 多 Agent 框架 |
+| `pyautogen` | ==0.4 | 多 Agent 框架（兼容 Python 3.13） |
 | `openai` | >=1.0.0 | LLM API |
 | `streamlit` | >=1.28.0 | Web 界面 |
 | `pytest` | >=7.4.0 | 测试框架 |
 | `rich` | >=13.0.0 | 终端美化 |
-
----
-
-## 🚀 迁移指南 (从旧版本)
-
-### 从 pyautogen 0.2.x 升级到 0.10.0
-
-#### 1. 配置变化
-
-```python
-# 旧代码
-llm_config = {
-    "config_list": [{"model": "gpt-4", "api_key": "..."}],
-    "temperature": 0.7,
-}
-
-# 新代码
-from autogen.ext.models.openai import OpenAIChatCompletionClient
-model_client = OpenAIChatCompletionClient(model="gpt-4", api_key="...")
-```
-
-#### 2. Agent 创建变化
-
-```python
-# 旧代码
-AssistantAgent(
-    name="agent",
-    llm_config=llm_config,
-    is_termination_msg=lambda msg: "TERMINATE" in msg.get("content", ""),
-)
-
-# 新代码
-AssistantAgent(
-    name="agent",
-    model_client=model_client,
-)
-```
-
-#### 3. 对话启动变化
-
-```python
-# 旧代码
-agent.initiate_chat(
-    recipient,
-    message="Hello",
-    clear_history=True,
-)
-
-# 新代码
-agent.run(
-    "Hello",
-    recipient=recipient,
-)
-```
-
-#### 4. 代码执行变化
-
-```python
-# 旧代码
-code_execution_config = {
-    "work_dir": "./outputs",
-    "use_docker": False,
-}
-
-# 新代码
-from autogen.coding import CommandLineCodeExecutor
-code_executor = CommandLineCodeExecutor(work_dir="./outputs")
-```
 
 ---
 

@@ -5,7 +5,7 @@
 """
 import os
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 
 # 加载环境变量
@@ -49,49 +49,35 @@ class Config:
         # 确保工作目录存在
         os.makedirs(self.work_dir, exist_ok=True)
 
-    def get_model_config(self) -> dict:
+    def get_llm_config(self) -> Dict[str, Any]:
         """
-        获取 AutoGen 0.10.0 需要的模型配置字典
-
-        AutoGen 0.10.0 使用 OpenAI model client 的格式
+        获取 AutoGen 需要的 LLM 配置字典
 
         Returns:
             包含模型配置的字典
         """
-        from autogen.ext.models.openai import OpenAIChatCompletionClient
-
-        # 创建模型客户端
-        model_client = OpenAIChatCompletionClient(
-            model=self.model,
-            api_key=self.api_key,
-            base_url=self.api_base if self.api_base != 'https://api.openai.com/v1' else None,
-        )
-
         return {
-            'model_client': model_client,
-            'temperature': self.temperature,
-            'max_tokens': self.max_tokens,
+            "config_list": [
+                {
+                    "model": self.model,
+                    "api_key": self.api_key,
+                    "base_url": self.api_base,
+                }
+            ],
+            "temperature": self.temperature,
+            "cache_seed": None,  # 禁用缓存以获得最新的响应
         }
 
-    def get_code_execution_config(self) -> dict:
+    def get_code_execution_config(self) -> Dict[str, Any]:
         """
         获取代码执行配置
-
-        AutoGen 0.10.0 使用 CodeBlock 类
 
         Returns:
             包含代码执行配置的字典
         """
-        from autogen.coding import CodeBlock, DockerCommandLineCodeExecutor, CommandLineCodeExecutor
-
-        if self.use_docker:
-            executor = DockerCommandLineCodeExecutor(work_dir=self.work_dir)
-        else:
-            executor = CommandLineCodeExecutor(work_dir=self.work_dir)
-
         return {
-            'code_executor': executor,
-            'use_docker': self.use_docker,
+            "work_dir": self.work_dir,
+            "use_docker": self.use_docker,
         }
 
 
