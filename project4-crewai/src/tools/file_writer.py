@@ -48,18 +48,25 @@ class FileWriterTool:
     def get_schema(self) -> dict:
         """返回工具的 schema 定义"""
         return {
-            "type": "object",
-            "properties": {
-                "file_path": {
-                    "type": "string",
-                    "description": "要写入的文件路径"
-                },
-                "content": {
-                    "type": "string",
-                    "description": "要写入的内容"
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "file_path": {
+                            "type": "string",
+                            "description": "要写入的文件路径"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "要写入的内容"
+                        }
+                    },
+                    "required": ["file_path", "content"]
                 }
-            },
-            "required": ["file_path", "content"]
+            }
         }
 
     def run(self, file_path: str, content: str) -> str:

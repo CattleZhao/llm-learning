@@ -53,5 +53,10 @@ def test_FileWriterTool_schema():
     tool = FileWriterTool()
     schema = tool.get_schema()
 
-    assert "file_path" in schema["properties"]
-    assert "content" in schema["properties"]
+    assert schema["type"] == "function"
+    assert "function" in schema
+    assert "name" in schema["function"]
+    assert "description" in schema["function"]
+    assert "parameters" in schema["function"]
+    assert "file_path" in schema["function"]["parameters"]["properties"]
+    assert "content" in schema["function"]["parameters"]["properties"]
