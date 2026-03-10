@@ -144,9 +144,38 @@ pytest tests/ -m integration
 
 在 `.env` 文件中可配置以下参数：
 
+### 使用 OpenAI API
+
+```bash
+OPENAI_API_KEY=sk-your-openai-key-here
+OPENAI_API_BASE=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o
+```
+
+### 使用 Anthropic Claude API
+
+如果你有 Anthropic API 端点，配置如下：
+
+```bash
+OPENAI_API_KEY=your-anthropic-api-key-here
+OPENAI_API_BASE=https://your-anthropic-endpoint.com/v1
+OPENAI_MODEL=claude-sonnet-4-20250514
+```
+
+### 使用其他 OpenAI 兼容 API
+
+```bash
+OPENAI_API_KEY=any-key
+OPENAI_API_BASE=http://localhost:8000/v1
+OPENAI_MODEL=your-model-name
+```
+
+### 完整配置参数
+
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| `OPENAI_API_KEY` | OpenAI API 密钥 | 必填 |
+| `OPENAI_API_KEY` | API 密钥 | 必填 |
+| `OPENAI_API_BASE` | API 端点 URL | `https://api.openai.com/v1` |
 | `OPENAI_MODEL` | 使用的模型 | `gpt-4o` |
 | `TEMPERATURE` | LLM 温度参数 | `0.7` |
 | `MAX_TOKENS` | 最大 token 数 | `2000` |

@@ -53,6 +53,8 @@ class Config:
         """
         获取 AutoGen 需要的 LLM 配置字典
 
+        支持 OpenAI 或任何 OpenAI 兼容的 API（如 Anthropic 端点）。
+
         Returns:
             包含模型配置的字典
         """
