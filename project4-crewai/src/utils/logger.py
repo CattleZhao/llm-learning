@@ -1,14 +1,14 @@
 """
 日志工具模块
 
-提供统一的日志接口，支持彩色输出（使用 Rich）。
+提供统一的日志接口，使用标准 logging 模块。
 """
 import logging
 import sys
 from typing import Optional
 
 # 全局 logger 缓存
-_loggers: dict = {}
+_loggers: dict[str, logging.Logger] = {}
 
 
 def setup_logging(level: str = 'INFO') -> None:
