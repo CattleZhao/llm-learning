@@ -53,13 +53,23 @@ class Config:
         """
         获取 AutoGen 需要的 LLM 配置字典
 
+        AutoGen 0.2.x 要求的格式：
+        {
+            "config_list": [{"model": ..., "api_key": ..., "base_url": ...}],
+            "temperature": ...,
+        }
+
         Returns:
             包含模型配置的字典
         """
         return {
-            "model": self.model,
-            "api_key": self.api_key,
-            "base_url": self.api_base,
+            "config_list": [
+                {
+                    "model": self.model,
+                    "api_key": self.api_key,
+                    "base_url": self.api_base,
+                }
+            ],
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
         }
