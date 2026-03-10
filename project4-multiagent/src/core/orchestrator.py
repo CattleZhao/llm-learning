@@ -4,7 +4,7 @@ Orchestrator 模块
 Orchestrator 负责协调所有 Agent 进行协作，实现完整的代码开发工作流。
 """
 from typing import List, Optional, Dict, Any
-from autogen import Agent, ConversableAgent
+from autogen import Agent
 from src.core.config import Config
 from src.agents import (
     create_user_proxy,
@@ -27,7 +27,7 @@ class CodeDevelopmentOrchestrator:
     def __init__(
         self,
         config: Config,
-        user_proxy: Optional[ConversableAgent] = None,
+        user_proxy: Optional[Agent] = None,
         coder: Optional[Agent] = None,
         reviewer: Optional[Agent] = None,
         tester: Optional[Agent] = None,
@@ -97,21 +97,17 @@ class CodeDevelopmentOrchestrator:
             if coder_first:
                 # 直接从 UserProxy -> Coder 开始
                 logger.info("Starting conversation: user_proxy -> coder")
-                self.user_proxy.initiate_chat(
-                    self.coder,
-                    message=task_description,
-                    clear_history=True,
+                response = self.user_proxy.run(
+                    task_description,
+                    recipient=self.coder,
                 )
             else:
-                # 让 UserProxy 决定如何处理任务
+                # 让 UserProxy 处理任务
                 logger.info("Starting conversation: user_proxy -> (auto)")
-                self.user_proxy.initiate_chat(
-                    message=task_description,
-                    clear_history=True,
-                )
+                response = self.user_proxy.run(task_description)
 
             # 获取对话历史
-            results['conversation_history'] = self._get_conversation_history()
+            results['conversation_history'] = self._extract_conversation_from_response(response)
             results['success'] = True
 
         except Exception as e:
@@ -121,25 +117,29 @@ class CodeDevelopmentOrchestrator:
         logger.info("Task execution completed")
         return results
 
-    def _get_conversation_history(self) -> List[Dict[str, Any]]:
+    def _extract_conversation_from_response(self, response) -> List[Dict[str, Any]]:
         """
-        提取对话历史
+        从响应中提取对话历史
+
+        Args:
+            response: Agent 的响应对象
 
         Returns:
             对话消息列表
         """
         history = []
 
-        # 从 user_proxy 获取对话历史（它存储所有对话）
-        for agent in self.agents:
-            if hasattr(agent, 'chat_messages'):
-                for other_agent, messages in agent.chat_messages.items():
-                    for msg in messages:
-                        history.append({
-                            'from': msg.get('role', 'unknown'),
-                            'to': other_agent.name if hasattr(other_agent, 'name') else 'unknown',
-                            'content': msg.get('content', ''),
-                        })
+        try:
+            # AutoGen 0.10.0 的响应对象结构
+            if hasattr(response, 'messages'):
+                for msg in response.messages:
+                    history.append({
+                        'from': getattr(msg, 'source', 'unknown'),
+                        'to': getattr(msg, 'recipient', 'unknown'),
+                        'content': getattr(msg, 'content', ''),
+                    })
+        except Exception as e:
+            logger.warning(f"Failed to extract conversation history: {e}")
 
         return history
 
@@ -175,32 +175,35 @@ class CodeDevelopmentOrchestrator:
             # 阶段 1: 请求 Coder 编写代码
             logger.info("Stage 1: Requesting code from Coder")
             coding_prompt = f"Please write code for: {task_description}"
-            self.user_proxy.initiate_chat(
-                self.coder,
-                message=coding_prompt,
-                clear_history=True,
+            response_coder = self.user_proxy.run(
+                coding_prompt,
+                recipient=self.coder,
             )
+            results['stages']['coder'] = self._extract_conversation_from_response(response_coder)
 
             # 阶段 2: 请求 Reviewer 审查代码
             logger.info("Stage 2: Requesting review from Reviewer")
             review_prompt = "Please review the code above"
-            self.user_proxy.initiate_chat(
-                self.reviewer,
-                message=review_prompt,
-                clear_history=False,
+            response_reviewer = self.user_proxy.run(
+                review_prompt,
+                recipient=self.reviewer,
             )
+            results['stages']['reviewer'] = self._extract_conversation_from_response(response_reviewer)
 
             # 阶段 3: 请求 Tester 编写测试
             logger.info("Stage 3: Requesting tests from Tester")
             test_prompt = f"Please write tests for: {task_description}"
-            self.user_proxy.initiate_chat(
-                self.tester,
-                message=test_prompt,
-                clear_history=False,
+            response_tester = self.user_proxy.run(
+                test_prompt,
+                recipient=self.tester,
             )
+            results['stages']['tester'] = self._extract_conversation_from_response(response_tester)
 
             results['success'] = True
-            results['conversation_history'] = self._get_conversation_history()
+
+            # 合并所有对话历史
+            for stage_name, stage_history in results['stages'].items():
+                results['conversation_history'].extend(stage_history)
 
         except Exception as e:
             logger.error(f"Sequential workflow failed: {e}", exc_info=True)
@@ -226,7 +229,7 @@ class CodeDevelopmentOrchestrator:
 
 def create_orchestrator(
     config: Config,
-    user_proxy: Optional[ConversableAgent] = None,
+    user_proxy: Optional[Agent] = None,
     coder: Optional[Agent] = None,
     reviewer: Optional[Agent] = None,
     tester: Optional[Agent] = None,
