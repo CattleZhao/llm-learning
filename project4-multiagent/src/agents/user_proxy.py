@@ -53,7 +53,7 @@ def create_user_proxy(
     max_consecutive_auto_reply: Optional[int] = None,
     code_execution_config: Optional[Dict[str, Any]] = None,
     default_auto_reply: str = "",
-    is_termination_msg: Optional[Callable[[str], bool]] = None,
+    is_termination_msg: Optional[Callable[[dict], bool]] = None,
 ) -> UserProxyAgent:
     """
     创建一个 UserProxy agent
@@ -68,7 +68,7 @@ def create_user_proxy(
         max_consecutive_auto_reply: 最大连续自动回复次数
         code_execution_config: 代码执行配置
         default_auto_reply: 默认自动回复消息
-        is_termination_msg: 判断是否终止的函数
+        is_termination_msg: 判断是否终止的函数（接收消息字典）
 
     Returns:
         配置好的 UserProxyAgent 实例
@@ -87,9 +87,9 @@ def create_user_proxy(
 
     # 默认终止消息检测函数
     if is_termination_msg is None:
-        def is_termination_msg(msg: str) -> bool:
-            """判断是否应该终止对话"""
-            return "TERMINATE" in msg.upper()
+        def is_termination_msg(msg: dict) -> bool:
+            content = msg.get("content", "")
+            return "TERMINATE" in content.upper()
 
     # 创建 Agent
     agent = UserProxyAgent(
@@ -129,9 +129,10 @@ def create_user_proxy_for_web(
         "use_docker": config.use_docker,
     }
 
-    def is_termination_msg(msg: str) -> bool:
+    def is_termination_msg(msg: dict) -> bool:
         """Web 界面的终止检测"""
-        return "TERMINATE" in msg.upper() or "任务完成" in msg or "完成" in msg
+        content = msg.get("content", "")
+        return "TERMINATE" in content.upper() or "任务完成" in content or "完成" in content
 
     agent = UserProxyAgent(
         name=name,
