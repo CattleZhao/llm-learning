@@ -1,0 +1,17 @@
+# Sample tasks for testing the Code Development Crew
+
+simple_algorithm:
+  description: "实现一个计算斐波那契数列的函数"
+  expected_output: "包含斐波那契函数的Python代码"
+
+data_processing:
+  description: "创建一个处理 CSV 数据的脚本"
+  expected_output: "能够读取和处理CSV文件的Python脚本"
+
+sorting:
+  description: "实现快速排序算法"
+  expected_output: "包含快速排序算法的Python函数"
+
+string_manipulation:
+  description: "实现字符串反转函数"
+  expected_output: "字符串反转的Python实现"
