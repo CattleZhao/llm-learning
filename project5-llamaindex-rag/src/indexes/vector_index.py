@@ -15,6 +15,7 @@ from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.embeddings.ollama import OllamaEmbedding
 from src.config import get_settings
 from typing import Sequence, Optional
+import httpx
 
 
 class AnthropicLLM(CustomLLM):
@@ -29,13 +30,51 @@ class AnthropicLLM(CustomLLM):
 
     def __init__(self, api_key: str, base_url: str, model: str, **kwargs):
         super().__init__(**kwargs)
-        self._client = Anthropic(api_key=api_key, base_url=base_url)
+        self._api_key = api_key
+        self._base_url = base_url.rstrip('/')
         self._model = model
+        # 初始化 Anthropic 客户端
+        self._client = Anthropic(api_key=api_key, base_url=base_url)
+
+        # 打印 client 详细信息
+        print(f"\n{'='*50}")
+        print(f"[DEBUG] AnthropicLLM 初始化:")
+        print(f"[DEBUG]   api_key: {api_key[:20]}...{api_key[-10:]}")
+        print(f"[DEBUG]   base_url: {base_url}")
+        print(f"[DEBUG]   model: {model}")
+        print(f"[DEBUG]   client.base_url: {self._client.base_url}")
+        print(f"[DEBUG]   client.api_key: {self._client.api_key[:20]}...{self._client.api_key[-10:]}")
+        print(f"{'='*50}\n")
+
         self._metadata = LLMMetadata(
             context_window=self.context_window,
             num_output=self.num_output,
             model_name=model,
         )
+
+    def _test_direct_api(self):
+        """测试直接 API 调用"""
+        print(f"[DEBUG] Testing direct API call to {self._base_url}")
+        try:
+            with httpx.Client(timeout=30) as client:
+                response = client.post(
+                    f"{self._base_url}/v1/messages",
+                    headers={
+                        "x-api-key": self._api_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json"
+                    },
+                    json={
+                        "model": self._model,
+                        "max_tokens": 100,
+                        "messages": [{"role": "user", "content": "test"}]
+                    }
+                )
+                print(f"[DEBUG] Direct API response status: {response.status_code}")
+                if response.status_code != 200:
+                    print(f"[DEBUG] Direct API error: {response.text}")
+        except Exception as e:
+            print(f"[DEBUG] Direct API test failed: {e}")
 
     @property
     def metadata(self) -> LLMMetadata:
