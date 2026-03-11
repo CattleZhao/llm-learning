@@ -3,16 +3,15 @@
 
 管理 LlamaIndex 向量索引的创建和配置
 使用 ChromaDB 作为向量存储
-混合架构: Anthropic LLM (原生 SDK) + Hugging Face Embedding
+混合架构: Anthropic LLM (原生 SDK) + Ollama Embedding
 """
 import chromadb
 from anthropic import Anthropic
 from llama_index.core import VectorStoreIndex, Settings
 from llama_index.core.node_parser import MarkdownNodeParser
 from llama_index.core.llms import CustomLLM, CompletionResponse, LLMMetadata
-from llama_index.core.embeddings import BaseEmbedding
 from llama_index.vector_stores.chroma import ChromaVectorStore
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.embeddings.ollama import OllamaEmbedding
 from src.config import get_settings
 from typing import Sequence
 
@@ -77,10 +76,10 @@ class VectorIndexManager:
             base_url=self.settings.anthropic_base_url,
             model=self.settings.anthropic_model
         )
-        # 配置 Hugging Face 嵌入模型
-        Settings.embed_model = HuggingFaceEmbedding(
-            model_name=self.settings.hf_embed_model,
-            device=self.settings.embed_device
+        # 配置 Ollama 嵌入模型
+        Settings.embed_model = OllamaEmbedding(
+            model_name=self.settings.embed_model,
+            base_url=self.settings.ollama_base_url
         )
 
     def create_index(self, documents):

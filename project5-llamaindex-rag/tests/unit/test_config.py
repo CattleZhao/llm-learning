@@ -24,23 +24,23 @@ def test_settings_load_from_env(monkeypatch):
 def test_settings_default_values(monkeypatch):
     """测试默认配置值"""
     # 清除环境变量
-    for key in ["ANTHROPIC_MODEL", "HF_EMBED_MODEL", "EMBED_DEVICE", "CHUNK_SIZE"]:
+    for key in ["ANTHROPIC_MODEL", "EMBED_MODEL", "CHUNK_SIZE"]:
         monkeypatch.delenv(key, raising=False)
     # 设置必需的 API key
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-default-key")
 
     settings = get_settings()
     assert settings.anthropic_model == "claude-sonnet-4-20250514"
-    assert settings.hf_embed_model == "nomic-ai/nomic-embed-text-v1.5"
-    assert settings.embed_device == "cpu"
+    assert settings.embed_model == "nomic-embed-text"
+    assert settings.ollama_base_url == "http://localhost:11434"
     assert settings.chunk_size == 512
 
-def test_settings_hf_embed_config(monkeypatch):
-    """测试 Hugging Face 嵌入配置"""
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-hf-key")
-    monkeypatch.setenv("HF_EMBED_MODEL", "BAAI/bge-large-zh-v1.5")
-    monkeypatch.setenv("EMBED_DEVICE", "cuda")
+def test_settings_ollama_config(monkeypatch):
+    """测试 Ollama 嵌入配置"""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-ollama-key")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:8080")
+    monkeypatch.setenv("EMBED_MODEL", "mxbai-embed-large")
 
     settings = get_settings()
-    assert settings.hf_embed_model == "BAAI/bge-large-zh-v1.5"
-    assert settings.embed_device == "cuda"
+    assert settings.ollama_base_url == "http://localhost:8080"
+    assert settings.embed_model == "mxbai-embed-large"

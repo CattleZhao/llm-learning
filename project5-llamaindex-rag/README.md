@@ -19,6 +19,10 @@
 # 安装依赖
 pip install -r requirements.txt
 
+# 配置 Ollama (用于嵌入)
+ollama pull nomic-embed-text
+ollama serve
+
 # 配置环境变量
 cp .env.example .env
 # 编辑 .env，添加 ANTHROPIC_API_KEY
@@ -30,7 +34,7 @@ streamlit run app/web.py
 ## 技术栈
 
 - **LlamaIndex** - RAG 框架
-- **Anthropic Claude** - LLM (API)
-- **Hugging Face** - 嵌入模型 (nomic-embed-text-v1.5)
+- **Anthropic Claude** - LLM (原生 SDK)
+- **Ollama** - 嵌入模型 (nomic-embed-text)
 - **ChromaDB** - 向量数据库
 - **Streamlit** - Web 界面
