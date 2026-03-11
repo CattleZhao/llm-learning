@@ -86,7 +86,7 @@ def main():
             st.warning("🟡 请先加载文档")
 
         st.markdown("---")
-        st.caption("混合架构: Anthropic LLM + Ollama Embedding")
+        st.caption("混合架构: Anthropic LLM + Hugging Face Embedding")
 
     # 主区域 - 问答
     if not st.session_state.documents_loaded:
@@ -103,7 +103,7 @@ def main():
 
         - 📄 支持 Markdown 文档
         - 🔍 语义搜索
-        - 🎯 混合架构: Anthropic LLM + Ollama Embedding
+        - 🎯 混合架构: Anthropic LLM + Hugging Face Embedding
         - 📊 显示答案来源
         """)
     else:
@@ -114,7 +114,7 @@ def main():
         with col1:
             st.caption(f"**LLM 模型:** {settings.anthropic_model}")
         with col2:
-            st.caption(f"**嵌入模型:** {settings.embed_model}")
+            st.caption(f"**嵌入模型:** {settings.hf_embed_model}")
 
         st.markdown("---")
 
