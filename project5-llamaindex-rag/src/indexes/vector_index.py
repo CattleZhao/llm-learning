@@ -44,13 +44,19 @@ class AnthropicLLM(CustomLLM):
     @llm_completion_callback()
     def complete(self, prompt: str, **kwargs) -> CompletionResponse:
         """同步完成方法"""
-        response = self._client.messages.create(
-            model=self._model,
-            max_tokens=kwargs.get("max_tokens", 4096),
-            messages=[{"role": "user", "content": prompt}],
-            temperature=kwargs.get("temperature", 0.7),
-        )
-        return CompletionResponse(text=response.content[0].text)
+        try:
+            response = self._client.messages.create(
+                model=self._model,
+                max_tokens=kwargs.get("max_tokens", 4096),
+                messages=[{"role": "user", "content": prompt}],
+                temperature=kwargs.get("temperature", 0.7),
+            )
+            return CompletionResponse(text=response.content[0].text)
+        except Exception as e:
+            print(f"[DEBUG] Anthropic API Error: {e}")
+            print(f"[DEBUG] Using model: {self._model}")
+            print(f"[DEBUG] API Key (first 10 chars): {self._client.api_key[:10]}...")
+            raise
 
     @llm_completion_callback()
     def stream_complete(self, prompt: str, **kwargs):

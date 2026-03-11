@@ -5,6 +5,7 @@ RAG 查询引擎
 """
 from src.config import get_settings
 from src.indexes.vector_index import VectorIndexManager
+from llama_index.core import Settings
 
 
 class RAGQueryEngine:
@@ -27,6 +28,7 @@ class RAGQueryEngine:
         """配置查询引擎"""
         self.query_engine = self.index.as_query_engine(
             similarity_top_k=self.settings.top_k,
+            llm=Settings.llm,  # 显式使用配置的 LLM
             verbose=True
         )
 
