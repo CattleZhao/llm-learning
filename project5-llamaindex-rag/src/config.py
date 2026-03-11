@@ -1,7 +1,7 @@
 """
 配置管理模块
 
-混合架构: Anthropic LLM + Ollama Embedding
+混合架构: Anthropic LLM + Hugging Face Embedding
 """
 import os
 from dataclasses import dataclass, field
@@ -26,12 +26,12 @@ class Settings:
         default_factory=lambda: os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
     )
 
-    # ========== Ollama 嵌入配置 ==========
-    ollama_base_url: str = field(
-        default_factory=lambda: os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    # ========== Hugging Face 嵌入配置 ==========
+    hf_embed_model: str = field(
+        default_factory=lambda: os.getenv("HF_EMBED_MODEL", "nomic-ai/nomic-embed-text-v1.5")
     )
-    embed_model: str = field(
-        default_factory=lambda: os.getenv("EMBED_MODEL", "nomic-embed-text")
+    embed_device: str = field(
+        default_factory=lambda: os.getenv("EMBED_DEVICE", "cpu")
     )
 
     # ========== 文档配置 ==========
