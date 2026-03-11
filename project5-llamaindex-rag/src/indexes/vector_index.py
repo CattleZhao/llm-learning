@@ -10,10 +10,11 @@ from anthropic import Anthropic
 from llama_index.core import VectorStoreIndex, Settings
 from llama_index.core.node_parser import MarkdownNodeParser
 from llama_index.core.llms import CustomLLM, CompletionResponse, LLMMetadata
+from llama_index.core.llms.callbacks import llm_completion_callback
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.embeddings.ollama import OllamaEmbedding
 from src.config import get_settings
-from typing import Sequence
+from typing import Sequence, Optional
 
 
 class AnthropicLLM(CustomLLM):
@@ -24,13 +25,13 @@ class AnthropicLLM(CustomLLM):
 
     context_window: int = 200000
     num_output: int = 4096
-    _client: Anthropic = None
+    model_name: str = "anthropic-custom"
 
     def __init__(self, api_key: str, base_url: str, model: str, **kwargs):
         super().__init__(**kwargs)
         self._client = Anthropic(api_key=api_key, base_url=base_url)
         self._model = model
-        self.metadata = LLMMetadata(
+        self._metadata = LLMMetadata(
             context_window=self.context_window,
             num_output=self.num_output,
             model_name=model,
@@ -40,12 +41,9 @@ class AnthropicLLM(CustomLLM):
     def metadata(self) -> LLMMetadata:
         return self._metadata
 
-    @metadata.setter
-    def metadata(self, value):
-        self._metadata = value
-
-    def _complete(self, prompt: str, **kwargs) -> CompletionResponse:
-        """原生 Anthropic SDK 调用"""
+    @llm_completion_callback()
+    def complete(self, prompt: str, **kwargs) -> CompletionResponse:
+        """同步完成方法"""
         response = self._client.messages.create(
             model=self._model,
             max_tokens=kwargs.get("max_tokens", 4096),
@@ -54,8 +52,9 @@ class AnthropicLLM(CustomLLM):
         )
         return CompletionResponse(text=response.content[0].text)
 
-    def _stream_complete(self, prompt: str, **kwargs):
-        """流式输出支持（可选实现）"""
+    @llm_completion_callback()
+    def stream_complete(self, prompt: str, **kwargs):
+        """流式完成方法"""
         raise NotImplementedError("流式输出暂未实现")
 
 
