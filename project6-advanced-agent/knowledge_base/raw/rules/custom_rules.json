@@ -1,0 +1,23 @@
+{
+  "rules": [
+    {
+      "name": "你的规则名称",
+      "category": "规则类别",
+      "severity": "严重程度 (low/medium/high/critical)",
+      "description": "规则描述，说明这条规则检测什么",
+      "patterns": [
+        "com/example/.*",
+        ".*\\.malicious/.*"
+      ],
+      "tags": ["标签1", "标签2"],
+      "references": [
+        "参考链接或说明"
+      ]
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2024-03-12",
+    "maintainer": "你的名字"
+  }
+}

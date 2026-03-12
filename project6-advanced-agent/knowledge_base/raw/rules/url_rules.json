@@ -1,0 +1,63 @@
+{
+  "rules": [
+    {
+      "name": "已知_C2_服务器",
+      "category": "c2_server",
+      "severity": "critical",
+      "description": "连接到已知的命令与控制服务器",
+      "patterns": [
+        ".*\\.c2server\\.com",
+        ".*\\.evil-c2\\.net",
+        ".*\\.botnet\\.org"
+      ],
+      "tags": ["c2", "botnet"],
+      "references": [
+        "威胁情报库已知 C2 服务器列表"
+      ]
+    },
+    {
+      "name": "恶意域名_硬编码",
+      "category": "malicious_domain",
+      "severity": "high",
+      "description": "硬编码的已知恶意域名",
+      "patterns": [
+        ".*\\.malware-download\\.com",
+        ".*\\.susicious-api\\.net",
+        ".*\\.payload-server\\.org"
+      ],
+      "tags": ["malware", "payload"],
+      "references": []
+    },
+    {
+      "name": "钓鱼网站_特征",
+      "category": "phishing",
+      "severity": "critical",
+      "description": "钓鱼网站的 URL 模式",
+      "patterns": [
+        ".*\\.phishing-.*\\.com",
+        ".*\\.fake-bank.*\\..*",
+        ".*\\.login-verify.*\\..*"
+      ],
+      "tags": ["phishing", "social_engineering"],
+      "references": []
+    },
+    {
+      "name": "广告追踪域名",
+      "category": "tracking",
+      "severity": "low",
+      "description": "已知的广告和追踪域名",
+      "patterns": [
+        ".*\\.adnetwork\\.com",
+        ".*\\.analytics\\.com",
+        ".*\\.tracker\\.net"
+      ],
+      "tags": ["adware", "privacy"],
+      "references": []
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2024-03-12",
+    "maintainer": "Security Team"
+  }
+}

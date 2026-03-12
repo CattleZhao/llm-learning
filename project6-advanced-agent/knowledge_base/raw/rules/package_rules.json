@@ -1,0 +1,95 @@
+{
+  "rules": [
+    {
+      "name": "木马_通信包_特征",
+      "category": "trojan",
+      "severity": "critical",
+      "description": "检测木马的通信组件包路径模式",
+      "patterns": [
+        "com/malware/trojan/.*",
+        "com/suspicious/communication/.*",
+        ".*\\.c2/.*",
+        ".*\\.command/.*"
+      ],
+      "tags": ["trojan", "c2", "communication"],
+      "references": [
+        "已知木马家族 A 的通信模式"
+      ]
+    },
+    {
+      "name": "恶意_加载器_特征",
+      "category": "loader",
+      "severity": "high",
+      "description": "检测动态加载器和恶意载荷",
+      "patterns": [
+        ".*\\.loader/.*",
+        ".*\\.payload/.*",
+        ".*\\.inject/.*",
+        ".*\\.core/.*"
+      ],
+      "tags": ["loader", "dynamic_code", "obfuscation"],
+      "references": []
+    },
+    {
+      "name": "挖矿软件_特征",
+      "category": "cryptomining",
+      "severity": "critical",
+      "description": "检测加密货币挖矿软件",
+      "patterns": [
+        "com/miner/.*",
+        ".*\\.mining/.*",
+        ".*\\.stratum/.*",
+        ".*\\.pool/.*"
+      ],
+      "tags": ["mining", "cryptocurrency"],
+      "references": []
+    },
+    {
+      "name": "广告软件_过度权限",
+      "category": "adware",
+      "severity": "medium",
+      "description": "检测广告软件的典型包路径",
+      "patterns": [
+        "com/ad/.*",
+        ".*\\.adcore/.*",
+        ".*\\.tracking/.*",
+        ".*\\.analytics/.*"
+      ],
+      "tags": ["adware", "privacy"],
+      "references": []
+    },
+    {
+      "name": "间谍软件_窃取信息",
+      "category": "spyware",
+      "severity": "critical",
+      "description": "检测窃取隐私信息的间谍软件",
+      "patterns": [
+        "com/spy/.*",
+        ".*\\.steal/.*",
+        ".*\\.keylog/.*",
+        ".*\\.record/.*"
+      ],
+      "tags": ["spyware", "privacy", "data_theft"],
+      "references": []
+    },
+    {
+      "name": "银行木马_特征",
+      "category": "banking_trojan",
+      "severity": "critical",
+      "description": "检测针对银行应用的木马",
+      "patterns": [
+        "com/banking/malware/.*",
+        ".*\\.phish/.*",
+        ".*\\.overlay/.*",
+        ".*\\.fakeui/.*"
+      ],
+      "tags": ["banking", "phishing", "trojan"],
+      "references": []
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2024-03-12",
+    "maintainer": "Security Team"
+  }
+}
