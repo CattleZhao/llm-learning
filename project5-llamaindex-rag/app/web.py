@@ -30,6 +30,8 @@ if "reranker_type" not in st.session_state:
     st.session_state.reranker_type = "keyword"
 if "compare_mode" not in st.session_state:
     st.session_state.compare_mode = False
+if "enable_streaming" not in st.session_state:
+    st.session_state.enable_streaming = True
 
 
 def load_documents():
@@ -71,7 +73,8 @@ def _create_query_engine():
         index=st.session_state.index,
         enable_rerank=st.session_state.enable_rerank,
         reranker_type=st.session_state.reranker_type,
-        compare_mode=st.session_state.compare_mode
+        compare_mode=st.session_state.compare_mode,
+        streaming=st.session_state.enable_streaming
     )
     st.session_state.query_engine = query_engine
 
@@ -154,6 +157,29 @@ def main():
             st.caption("🟡 Rerank 未启用")
 
         st.markdown("---")
+
+        # 流式输出配置
+        st.header("⚡ 流式输出")
+
+        enable_streaming = st.checkbox(
+            "启用流式输出",
+            value=st.session_state.enable_streaming,
+            help="实时显示生成的文本（打字机效果）"
+        )
+
+        # 保存状态并检测变化
+        if enable_streaming != st.session_state.enable_streaming:
+            st.session_state.enable_streaming = enable_streaming
+            if st.session_state.documents_loaded:
+                _create_query_engine()
+
+        # 显示当前状态
+        if enable_streaming:
+            st.success("🟢 流式输出已启用")
+        else:
+            st.caption("🟡 流式输出未启用")
+
+        st.markdown("---")
         st.caption("混合架构: Anthropic LLM (原生 SDK) + Ollama Embedding")
 
     # 主区域 - 问答
@@ -178,7 +204,7 @@ def main():
         st.header("💬 问答")
 
         # 显示配置
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.caption(f"**LLM:** {settings.anthropic_model}")
         with col2:
@@ -187,6 +213,9 @@ def main():
             rerank_status = "🟢" if st.session_state.enable_rerank else "🟡"
             compare_status = " (对比模式)" if st.session_state.compare_mode else ""
             st.caption(f"**Rerank:** {rerank_status}{compare_status}")
+        with col4:
+            stream_status = "🟢" if st.session_state.enable_streaming else "🟡"
+            st.caption(f"**Stream:** {stream_status}")
 
         st.markdown("---")
 
@@ -200,52 +229,92 @@ def main():
         # 查询按钮
         if st.button("🔍 提问", type="primary", use_container_width=True):
             if question.strip():
-                with st.spinner("正在查询..."):
+                # 流式输出
+                if st.session_state.enable_streaming:
                     try:
-                        result = st.session_state.query_engine.query(question)
+                        # 创建占位符用于流式显示
+                        answer_placeholder = st.empty()
+                        sources_placeholder = st.empty()
 
-                        # 对比模式
-                        if result.get("compare"):
-                            st.markdown("### 📊 对比结果")
+                        accumulated_text = ""
+                        sources = []
 
-                            # Baseline 结果
-                            with st.expander("🟡 基础检索 (无 Rerank)", expanded=False):
-                                st.write("**答案:**")
-                                st.write(result["compare"]["baseline"]["answer"])
-                                st.markdown("**来源:**")
-                                for i, source in enumerate(result["compare"]["baseline"]["sources"], 1):
-                                    score = f" (score: {source['score']:.3f})" if 'score' in source else ""
-                                    st.write(f"{i}. `{source['file_name']}`{score}")
+                        # 流式查询
+                        for chunk in st.session_state.query_engine.stream_query(question):
+                            if chunk.get("text"):
+                                accumulated_text += chunk["text"]
+                                # 实时更新显示
+                                with answer_placeholder.container():
+                                    st.subheader("📝 答案")
+                                    st.markdown(accumulated_text)
 
-                            # Reranked 结果
-                            with st.expander("🟢 重排序后 (With Rerank)", expanded=True):
-                                st.write("**答案:**")
-                                st.write(result["compare"]["reranked"]["answer"])
-                                st.markdown("**来源:**")
-                                for i, source in enumerate(result["compare"]["reranked"]["sources"], 1):
-                                    score = f" (score: {source['score']:.3f})" if 'score' in source else ""
-                                    st.write(f"{i}. `{source['file_name']}`{score}")
-                        else:
-                            # 正常模式 - 显示答案
-                            st.subheader("📝 答案")
-                            st.write(result["answer"])
+                            # 保存来源信息（在最后一个 chunk 中）
+                            if chunk.get("sources"):
+                                sources = chunk["sources"]
 
-                            # 显示 Rerank 状态
-                            if result.get("rerank_enabled"):
-                                st.caption("🔄 结果已通过重排序优化")
-
-                            # 显示来源
-                            if result["sources"]:
-                                st.subheader("📚 来源")
-                                for i, source in enumerate(result["sources"], 1):
-                                    file_name = source["file_name"] if isinstance(source, dict) else source
-                                    score = f" (score: {source['score']:.3f})" if isinstance(source, dict) and 'score' in source else ""
-                                    st.write(f"{i}. `{file_name}`{score}")
-                            else:
-                                st.caption("未找到相关来源")
+                            if chunk.get("done"):
+                                # 查询完成，显示来源
+                                with sources_placeholder.container():
+                                    if sources:
+                                        st.subheader("📚 来源")
+                                        for i, source in enumerate(sources, 1):
+                                            file_name = source["file_name"] if isinstance(source, dict) else source
+                                            score = f" (score: {source['score']:.3f})" if isinstance(source, dict) and 'score' in source else ""
+                                            st.write(f"{i}. `{file_name}`{score}")
+                                    else:
+                                        st.caption("未找到相关来源")
 
                     except Exception as e:
-                        st.error(f"查询出错: {str(e)}")
+                        st.error(f"流式查询出错: {str(e)}")
+
+                # 非流式输出
+                else:
+                    with st.spinner("正在查询..."):
+                        try:
+                            result = st.session_state.query_engine.query(question)
+
+                            # 对比模式
+                            if result.get("compare"):
+                                st.markdown("### 📊 对比结果")
+
+                                # Baseline 结果
+                                with st.expander("🟡 基础检索 (无 Rerank)", expanded=False):
+                                    st.write("**答案:**")
+                                    st.write(result["compare"]["baseline"]["answer"])
+                                    st.markdown("**来源:**")
+                                    for i, source in enumerate(result["compare"]["baseline"]["sources"], 1):
+                                        score = f" (score: {source['score']:.3f})" if 'score' in source else ""
+                                        st.write(f"{i}. `{source['file_name']}`{score}")
+
+                                # Reranked 结果
+                                with st.expander("🟢 重排序后 (With Rerank)", expanded=True):
+                                    st.write("**答案:**")
+                                    st.write(result["compare"]["reranked"]["answer"])
+                                    st.markdown("**来源:**")
+                                    for i, source in enumerate(result["compare"]["reranked"]["sources"], 1):
+                                        score = f" (score: {source['score']:.3f})" if 'score' in source else ""
+                                        st.write(f"{i}. `{source['file_name']}`{score}")
+                            else:
+                                # 正常模式 - 显示答案
+                                st.subheader("📝 答案")
+                                st.write(result["answer"])
+
+                                # 显示 Rerank 状态
+                                if result.get("rerank_enabled"):
+                                    st.caption("🔄 结果已通过重排序优化")
+
+                                # 显示来源
+                                if result["sources"]:
+                                    st.subheader("📚 来源")
+                                    for i, source in enumerate(result["sources"], 1):
+                                        file_name = source["file_name"] if isinstance(source, dict) else source
+                                        score = f" (score: {source['score']:.3f})" if isinstance(source, dict) and 'score' in source else ""
+                                        st.write(f"{i}. `{file_name}`{score}")
+                                else:
+                                    st.caption("未找到相关来源")
+
+                        except Exception as e:
+                            st.error(f"查询出错: {str(e)}")
             else:
                 st.warning("请输入问题")
 

@@ -99,8 +99,25 @@ class AnthropicLLM(CustomLLM):
 
     @llm_completion_callback()
     def stream_complete(self, prompt: str, **kwargs):
-        """流式完成方法"""
-        raise NotImplementedError("流式输出暂未实现")
+        """
+        流式完成方法
+
+        Yields:
+            CompletionResponse: 每个 token 的响应
+        """
+        try:
+            with self._client.messages.stream(
+                model=self._model,
+                max_tokens=kwargs.get("max_tokens", 4096),
+                messages=[{"role": "user", "content": prompt}],
+                temperature=kwargs.get("temperature", 0.7),
+            ) as stream:
+                for text in stream.text_stream:
+                    if text:
+                        yield CompletionResponse(text=text, delta=text)
+        except Exception as e:
+            print(f"[DEBUG] Anthropic Streaming API Error: {e}")
+            raise
 
 
 class VectorIndexManager:

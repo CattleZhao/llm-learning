@@ -66,6 +66,11 @@ class Settings:
         default_factory=lambda: os.getenv("COHERE_API_KEY", "")
     )
 
+    # ========== 流式输出配置 ==========
+    enable_streaming: bool = field(
+        default_factory=lambda: os.getenv("ENABLE_STREAMING", "true").lower() == "true"
+    )
+
     def __post_init__(self):
         """初始化后验证"""
         if not self.anthropic_api_key:
