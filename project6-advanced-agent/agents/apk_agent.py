@@ -1,7 +1,7 @@
 """
 APK 恶意行为分析 Agent
 
-结合 MCP 工具调用、恶意软件知识库和自我反思机制
+结合 jadx-cli 工具调用、恶意软件知识库和自我反思机制
 """
 import sys
 from pathlib import Path
@@ -9,8 +9,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from typing import Dict, List, Any, Optional
 from agents.base import BaseAgent, AgentResponse
-from tools.mcp.jadx_client import JMCPClient
+from tools.mcp.jadx_client import JadxWrapper
 from knowledge_base.malware_patterns import MalwareKnowledgeBase, get_knowledge_base
+from knowledge_base import get_rule_loader
 from reflection.checker import AnalysisReflection, create_reflection_checker, ReflectionResult
 from config import get_settings
 
@@ -19,13 +20,15 @@ class APKAnalysisAgent(BaseAgent):
     """
     APK 恶意行为分析 Agent
 
-    使用 MCP 工具进行 APK 反编译和分析，
+    使用 jadx-cli 进行 APK 反编译和分析，
     结合知识库和自我反思生成全面的安全报告
     """
 
     def __init__(
         self,
-        mcp_server_url: str = "http://localhost:3000",
+        jadx_path: Optional[str] = None,
+        output_dir: Optional[str] = None,
+        keep_output: bool = False,
         enable_advanced_analysis: bool = False
     ):
         super().__init__(
@@ -36,12 +39,16 @@ class APKAnalysisAgent(BaseAgent):
             enable_reflection=True
         )
 
-        # 初始化 MCP 客户端
-        self.mcp_client = JMCPClient(mcp_server_url)
-        self.mcp_client.connect()
+        # 初始化 JADX 封装器
+        self.jadx = JadxWrapper(
+            jadx_path=jadx_path,
+            output_dir=output_dir,
+            keep_output=keep_output
+        )
 
         # 获取知识库
         self.knowledge_base = get_knowledge_base()
+        self.rule_loader = get_rule_loader()
 
         # 创建反思检查器
         self.reflection_checker = create_reflection_checker(enable_advanced_analysis)
@@ -73,13 +80,21 @@ class APKAnalysisAgent(BaseAgent):
                 metadata={"error": "no_apk_path"}
             )
 
+        # 检查文件是否存在
+        if not Path(apk_path).exists():
+            return AgentResponse(
+                content=f"APK 文件不存在: {apk_path}",
+                metadata={"error": "file_not_found", "apk_path": apk_path}
+            )
+
         # 执行分析
         try:
             self._analyze_apk(apk_path)
             return self._generate_response()
         except Exception as e:
+            import traceback
             return AgentResponse(
-                content=f"分析过程中出错: {str(e)}",
+                content=f"分析过程中出错: {str(e)}\n\n```\n{traceback.format_exc()}\n```",
                 metadata={"error": str(e)}
             )
 
@@ -113,92 +128,130 @@ class APKAnalysisAgent(BaseAgent):
         Args:
             apk_path: APK 文件路径
         """
-        # 1. 反编译并获取基本信息
-        manifest = self.mcp_client.get_manifest(apk_path)
+        # 1. 反编译 APK
+        decompile_info = self.jadx.decompile_apk(apk_path)
+        self.current_analysis["decompile_info"] = decompile_info
+
+        # 2. 获取 Manifest 信息
+        manifest = self.jadx.get_manifest()
         self.current_analysis["manifest"] = manifest
 
-        # 2. 权限分析
-        permissions = self.mcp_client.get_permissions(apk_path)
+        # 3. 权限分析
+        permissions = self.jadx.get_permissions()
         self._analyze_permissions(permissions)
 
-        # 3. 网络通信分析
-        network_info = self.mcp_client.get_network_info(apk_path)
+        # 4. 获取包路径（用于规则匹配）
+        code_paths = self.jadx.get_code_paths()
+        self.current_analysis["code_paths"] = code_paths
+        self._match_package_rules(code_paths)
+
+        # 5. 网络通信分析
+        network_info = self.jadx.get_network_info()
         self.current_analysis["network_info"] = network_info
         self._analyze_network(network_info)
 
-        # 4. API 调用分析
-        api_calls = self.mcp_client.get_apis(apk_path)
+        # 6. API 调用分析
+        api_calls = self.jadx.get_apis()
         self.current_analysis["api_calls"] = api_calls
         self._analyze_apis(api_calls)
 
-        # 5. 字符串分析
-        strings = self.mcp_client.get_strings(apk_path)
+        # 7. 字符串分析
+        strings = self.jadx.get_strings()
+        self.current_analysis["all_strings"] = strings
         self.current_analysis["suspicious_strings"] = []
         self._analyze_strings(strings)
 
-        # 6. 代码结构分析
-        decompile_info = self.mcp_client.decompile_apk(apk_path)
-        self.current_analysis["code_analysis"] = decompile_info
-
-        # 7. 匹配恶意模式
+        # 8. 匹配恶意模式
         self._match_malware_patterns()
 
-        # 8. 计算风险等级
+        # 9. 计算风险等级
         self._calculate_risk_level()
 
-    def _analyze_permissions(self, permissions: List[str]):
+    def _analyze_permissions(self, permissions: Dict[str, Any]):
         """分析权限"""
-        dangerous_perms = [
-            "READ_PHONE_STATE", "READ_SMS", "SEND_SMS",
-            "ACCESS_FINE_LOCATION", "READ_CONTACTS",
-            "RECORD_AUDIO", "CAMERA", "READ_CALENDAR"
-        ]
+        self.current_analysis["permissions"] = permissions
 
-        found_dangerous = [p for p in permissions if any(d in p for d in dangerous_perms)]
+        dangerous = permissions.get("dangerous", [])
+        dangerous_count = len(dangerous)
 
-        self.current_analysis["permissions"] = {
-            "all": permissions,
-            "dangerous": found_dangerous,
-            "count": len(permissions),
-            "dangerous_count": len(found_dangerous)
-        }
-
-        if found_dangerous:
+        if dangerous_count > 0:
+            severity = "critical" if dangerous_count >= 5 else "high" if dangerous_count >= 3 else "medium"
             self.current_analysis.setdefault("findings", []).append({
                 "category": "permissions",
-                "severity": "high" if len(found_dangerous) >= 3 else "medium",
-                "description": f"发现 {len(found_dangerous)} 个危险权限",
-                "evidence": found_dangerous
+                "severity": severity,
+                "description": f"发现 {dangerous_count} 个危险权限",
+                "evidence": dangerous
             })
+
+    def _match_package_rules(self, code_paths: List[str]):
+        """使用自定义规则匹配包路径"""
+        matched_rules = []
+
+        for path in code_paths:
+            # 转换为类似 jadx 的格式
+            java_path = path.replace(".java", "")
+
+            # 匹配规则
+            rules = self.rule_loader.match_rules(java_path)
+            for rule in rules:
+                if rule not in matched_rules:
+                    matched_rules.append(rule)
+
+        if matched_rules:
+            for rule in matched_rules:
+                self.current_analysis.setdefault("findings", []).append({
+                    "category": "package_pattern",
+                    "severity": rule.severity,
+                    "description": f"匹配到恶意包路径规则: {rule.name}",
+                    "evidence": {
+                        "rule": rule.name,
+                        "category": rule.category,
+                        "matched_patterns": rule.patterns
+                    }
+                })
 
     def _analyze_network(self, network_info: Dict[str, Any]):
         """分析网络通信"""
-        findings = []
+        # 检查 URL 黑名单规则
+        urls = network_info.get("urls", [])
+        domains = network_info.get("domains", [])
+
+        # 匹配 URL 规则
+        for url in urls:
+            rules = self.rule_loader.match_url_rules(url)
+            for rule in rules:
+                self.current_analysis.setdefault("findings", []).append({
+                    "category": "url_blacklist",
+                    "severity": rule.severity,
+                    "description": f"匹配到恶意 URL 规则: {rule.name}",
+                    "evidence": {"url": url, "rule": rule.name}
+                })
 
         # 检查是否使用 HTTPS
-        urls = network_info.get("urls", [])
-        has_encryption = network_info.get("has_encryption", False)
-
-        non_https_urls = [u for u in urls if not u.startswith("https://")]
-        if non_https_urls:
-            findings.append({
-                "category": "network",
-                "severity": "high",
-                "description": "发现使用非 HTTPS 的网络通信",
-                "evidence": non_https_urls
-            })
-
-        # 检查是否有硬编码IP
-        ips = network_info.get("ips", [])
-        if ips:
-            findings.append({
+        if network_info.get("has_http") and not network_info.get("has_https"):
+            self.current_analysis.setdefault("findings", []).append({
                 "category": "network",
                 "severity": "medium",
-                "description": "发现硬编码 IP 地址",
-                "evidence": ips
+                "description": "发现使用非 HTTPS 的网络通信",
+                "evidence": urls
             })
 
-        self.current_analysis.setdefault("findings", []).extend(findings)
+        # 检查硬编码 IP
+        ips = network_info.get("ips", [])
+        if ips:
+            # 过滤掉内网 IP
+            external_ips = [
+                ip for ip in ips
+                if not (ip.startswith("192.168.") or ip.startswith("10.") or
+                       ip.startswith("172.16.") or ip == "127.0.0.1")
+            ]
+            if external_ips:
+                self.current_analysis.setdefault("findings", []).append({
+                    "category": "network",
+                    "severity": "high",
+                    "description": "发现硬编码公网 IP 地址",
+                    "evidence": external_ips
+                })
 
     def _analyze_apis(self, api_calls: List[Dict[str, Any]]):
         """分析 API 调用"""
@@ -216,15 +269,15 @@ class APKAnalysisAgent(BaseAgent):
             self.current_analysis.setdefault("findings", []).append({
                 "category": "api",
                 "severity": "high",
-                "description": "发现隐私敏感 API 调用",
-                "evidence": suspicious_apis
+                "description": f"发现 {len(suspicious_apis)} 个隐私敏感 API 调用",
+                "evidence": suspicious_apis[:5]  # 只显示前5个
             })
 
     def _analyze_strings(self, strings: List[str]):
         """分析字符串"""
         suspicious_patterns = [
             "password", "token", "deviceId", "imei",
-            "http://", "192.168", "10.0.0"
+            "api_key", "secret", "private_key"
         ]
 
         found_suspicious = [
@@ -340,9 +393,9 @@ class APKAnalysisAgent(BaseAgent):
         if "permissions" in self.current_analysis:
             report.append("## 权限分析")
             perms = self.current_analysis["permissions"]
-            report.append(f"- 总权限数: {perms['count']}")
-            report.append(f"- 危险权限: {perms['dangerous_count']}")
-            if perms["dangerous"]:
+            report.append(f"- 总权限数: {perms.get('count', 0)}")
+            report.append(f"- 危险权限: {perms.get('dangerous_count', 0)}")
+            if perms.get("dangerous"):
                 report.append(f"- 危险权限列表:")
                 for p in perms["dangerous"][:5]:  # 只显示前5个
                     report.append(f"  - {p}")
@@ -356,6 +409,17 @@ class APKAnalysisAgent(BaseAgent):
                 severity_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
                 icon = severity_icon.get(finding.get("severity", ""), "⚪")
                 report.append(f"{i}. {icon} [{finding.get('severity', '').upper()}] {finding['description']}")
+
+                # 显示证据
+                evidence = finding.get("evidence")
+                if evidence and isinstance(evidence, dict):
+                    if "rule" in evidence:
+                        report.append(f"   - 规则: {evidence['rule']}")
+                    if "url" in evidence:
+                        report.append(f"   - URL: {evidence['url']}")
+                elif evidence and isinstance(evidence, list) and len(evidence) > 0:
+                    if isinstance(evidence[0], str):
+                        report.append(f"   - 示例: {evidence[0]}")
             report.append("")
 
         # 分析质量
@@ -369,20 +433,26 @@ class APKAnalysisAgent(BaseAgent):
 
 # 便捷函数
 def create_apk_agent(
-    mcp_server_url: str = "http://localhost:3000",
+    jadx_path: Optional[str] = None,
+    output_dir: Optional[str] = None,
+    keep_output: bool = False,
     enable_advanced: bool = False
 ) -> APKAnalysisAgent:
     """
     创建 APK 分析 Agent
 
     Args:
-        mcp_server_url: MCP Server 地址
+        jadx_path: jadx 可执行文件路径
+        output_dir: 反编译输出目录
+        keep_output: 是否保留反编译输出
         enable_advanced: 是否启用高级分析
 
     Returns:
         APKAnalysisAgent 实例
     """
     return APKAnalysisAgent(
-        mcp_server_url=mcp_server_url,
+        jadx_path=jadx_path,
+        output_dir=output_dir,
+        keep_output=keep_output,
         enable_advanced_analysis=enable_advanced
     )

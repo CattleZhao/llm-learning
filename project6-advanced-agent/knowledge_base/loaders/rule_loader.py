@@ -169,6 +169,36 @@ class RuleLoader:
                 matched.append(rule)
         return matched
 
+    def match_url_rules(self, url: str) -> List[MalwareRule]:
+        """
+        获取所有匹配给定 URL 的规则
+
+        Args:
+            url: 要检查的 URL
+
+        Returns:
+            匹配的规则列表
+        """
+        import re
+
+        # URL 相关的类别
+        url_categories = {"url", "c2_server", "malicious_domain", "phishing", "tracking"}
+
+        matched = []
+        for rule in self.rules:
+            # 只检查 URL 相关类别的规则
+            if rule.category not in url_categories:
+                continue
+
+            for pattern in rule.patterns:
+                try:
+                    if re.search(pattern, url, re.IGNORECASE):
+                        matched.append(rule)
+                        break
+                except re.error:
+                    continue
+        return matched
+
     def get_all_categories(self) -> List[str]:
         """获取所有规则类别"""
         categories = set(r.category for r in self.rules)
