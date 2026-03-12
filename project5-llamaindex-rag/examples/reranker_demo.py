@@ -4,7 +4,12 @@ Reranker 演示脚本
 
 展示如何使用重排序功能
 """
+import sys
 from pathlib import Path
+
+# 添加项目根目录到 Python 路径
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from src.config import get_settings
 from src.loaders.markdown_loader import MarkdownLoader
 from src.indexes.vector_index import VectorIndexManager

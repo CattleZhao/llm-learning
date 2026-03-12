@@ -1,12 +1,13 @@
 """
 RAG 查询引擎
 
-提供基于向量索引的查询接口，支持重排序优化和流式输出
+提供基于向量索引的查询接口，支持重排序优化、流式输出和元数据过滤
 """
 from typing import Optional, List, Generator, Dict, Any
 from src.config import get_settings
 from src.indexes.vector_index import VectorIndexManager
 from src.rerank.postprocessor import create_reranker_postprocessor
+from src.metadata.filters import MetadataFilterBuilder
 from llama_index.core import Settings
 
 
@@ -19,7 +20,8 @@ class RAGQueryEngine:
         enable_rerank: bool = False,
         reranker_type: str = "keyword",
         compare_mode: bool = False,
-        streaming: bool = False
+        streaming: bool = False,
+        metadata_filters: Optional[Any] = None
     ):
         """
         初始化查询引擎
@@ -30,6 +32,7 @@ class RAGQueryEngine:
             reranker_type: Reranker 类型 ("keyword" 或 "cohere")
             compare_mode: 对比模式（同时返回 rerank 前后结果）
             streaming: 是否启用流式输出
+            metadata_filters: 元数据过滤条件 (LlamaIndex MetadataFilters)
         """
         self.settings = get_settings()
         self.index = index
@@ -37,6 +40,7 @@ class RAGQueryEngine:
         self.reranker_type = reranker_type
         self.compare_mode = compare_mode
         self.streaming = streaming
+        self.metadata_filters = metadata_filters
         self.query_engine = None
         self.baseline_query_engine = None  # 用于对比的无 rerank 版本
         if index:
@@ -44,13 +48,20 @@ class RAGQueryEngine:
 
     def _setup_query_engine(self):
         """配置查询引擎"""
+        # 构建查询参数
+        base_query_kwargs = {
+            "similarity_top_k": self.settings.top_k,
+            "llm": Settings.llm,
+            "streaming": self.streaming,
+            "verbose": False
+        }
+
+        # 添加元数据过滤
+        if self.metadata_filters:
+            base_query_kwargs["filters"] = self.metadata_filters
+
         # 基础查询引擎（无 rerank）
-        self.baseline_query_engine = self.index.as_query_engine(
-            similarity_top_k=self.settings.top_k,
-            llm=Settings.llm,
-            streaming=self.streaming,
-            verbose=False
-        )
+        self.baseline_query_engine = self.index.as_query_engine(**base_query_kwargs)
 
         # 带重排序的查询引擎
         if self.enable_rerank:
@@ -63,9 +74,7 @@ class RAGQueryEngine:
             self.query_engine = self.index.as_query_engine(
                 similarity_top_k=rerank_top_k,
                 node_postprocessors=[postprocessor],
-                llm=Settings.llm,
-                streaming=self.streaming,
-                verbose=False
+                **base_query_kwargs
             )
         else:
             self.query_engine = self.baseline_query_engine
@@ -264,3 +273,27 @@ class RAGQueryEngine:
         self.streaming = enabled
         if self.index:
             self._setup_query_engine()
+
+    def set_metadata_filters(self, filters: Optional[Any]):
+        """
+        设置元数据过滤器
+
+        Args:
+            filters: MetadataFilters 对象（LlamaIndex）或 None
+        """
+        self.metadata_filters = filters
+        if self.index:
+            self._setup_query_engine()
+
+    def clear_metadata_filters(self):
+        """清除元数据过滤器"""
+        self.set_metadata_filters(None)
+
+    def apply_filter_builder(self, filter_builder: MetadataFilterBuilder):
+        """
+        应用 MetadataFilterBuilder
+
+        Args:
+            filter_builder: MetadataFilterBuilder 实例
+        """
+        self.set_metadata_filters(filter_builder.build())

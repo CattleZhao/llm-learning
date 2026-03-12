@@ -1,12 +1,12 @@
 # Project 5: LlamaIndex RAG 知识库
 
-> 使用 LlamaIndex 构建的本地 Markdown 技术文档知识库，支持重排序和流式输出
+> 使用 LlamaIndex 构建的本地 Markdown 技术文档知识库，支持重排序、流式输出和元数据过滤
 
 ## 项目简介
 
 基于 LlamaIndex 框架的 RAG（检索增强生成）系统，支持本地 Markdown 技术文档的智能问答。
 
-**新增功能**: ✨ 支持检索结果重排序（Reranking）和流式输出
+**新增功能**: ✨ 支持检索结果重排序（Reranking）、流式输出和元数据过滤
 
 ## 功能特性
 
@@ -17,6 +17,7 @@
 - 🔄 **重排序优化 (Reranking)** - 提升检索质量
 - 📊 **对比模式** - 可视化 rerank 效果对比
 - ⚡ **流式输出** - 实时打字机效果，提升用户体验
+- 🏷️ **元数据过滤** - 按分类、标签、作者等精准检索
 
 ## 快速开始
 
@@ -95,6 +96,69 @@ ENABLE_STREAMING=true       # 是否启用流式输出（默认启用）
 | **流式输出** | 实时反馈，无需等待 | 交互式问答 |
 | **非流式输出** | 等待完成后一次性显示 | 批量处理、导出 |
 
+## 元数据过滤 (Metadata Filtering)
+
+### 什么是元数据过滤？
+
+在检索时根据文档的元数据（如分类、标签、作者等）进行筛选，实现精准检索。
+
+```
+Query + 过滤条件 → 向量检索 + 元数据筛选 → 精准结果
+```
+
+### 支持的元数据字段
+
+| 字段 | 说明 | 来源 |
+|------|------|------|
+| **category** | 文档分类 | YAML frontmatter 或自动提取 |
+| **tags** | 标签列表 | YAML frontmatter |
+| **author** | 作者 | YAML frontmatter 或自动提取 |
+| **year** | 年份 | 自动从日期提取 |
+| **title** | 标题 | 自动提取 |
+| **file_type** | 文件类型 | 自动提取 |
+
+### 文档元数据格式
+
+在 Markdown 文档开头添加 YAML frontmatter：
+
+```markdown
+---
+title: "文档标题"
+author: "作者名"
+category: "分类"
+tags: ["标签1", "标签2"]
+date: "2024-01-15"
+---
+
+# 文档内容
+...
+```
+
+### 使用方法
+
+在 Web 界面侧边栏的「元数据过滤」区域：
+
+1. 勾选「启用元数据过滤」
+2. 选择要过滤的字段和值
+3. 点击「应用过滤」
+
+### 代码示例
+
+```python
+from src.metadata.filters import MetadataFilterBuilder
+
+# 构建过滤器
+filter_builder = (MetadataFilterBuilder()
+                 .eq("category", "人工智能")
+                 .gte("year", 2024))
+
+# 应用到查询引擎
+query_engine = RAGQueryEngine(
+    index=index,
+    metadata_filters=filter_builder.build()
+)
+```
+
 ## 技术栈
 
 - **LlamaIndex** - RAG 框架
@@ -111,16 +175,23 @@ project5-llamaindex-rag/
 │   └── web.py              # Streamlit Web 界面
 ├── src/
 │   ├── config.py           # 配置管理
-│   ├── loaders/            # 文档加载器
+│   ├── loaders/            # 文档加载器（支持元数据提取）
 │   ├── indexes/            # 向量索引管理
-│   ├── query/              # 查询引擎
-│   └── rerank/             # 重排序模块 (新增)
+│   ├── query/              # 查询引擎（支持过滤）
+│   ├── metadata/           # 元数据模块 (新增)
+│   │   ├── extractor.py    # 元数据提取器
+│   │   └── filters.py      # 过滤器构建器
+│   └── rerank/             # 重排序模块
 │       ├── base.py         # 基类
 │       ├── keyword_reranker.py  # 关键词重排序
 │       ├── cohere_reranker.py   # Cohere API 重排序
 │       └── postprocessor.py     # LlamaIndex 适配器
 ├── data/
-│   └── docs/               # 示例文档
+│   └── docs/               # 示例文档（含元数据）
+├── examples/
+│   ├── reranker_demo.py    # Reranker 演示
+│   ├── streaming_demo.py   # 流式输出演示
+│   └── metadata_demo.py    # 元数据过滤演示 (新增)
 ├── tests/
 │   └── rerank/             # Reranker 测试
 └── requirements.txt

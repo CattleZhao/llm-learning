@@ -5,10 +5,12 @@ Streamlit Web Interface for LlamaIndex RAG
 """
 import streamlit as st
 from pathlib import Path
+from typing import Dict, List
 from src.config import get_settings
 from src.loaders.markdown_loader import MarkdownLoader
 from src.indexes.vector_index import VectorIndexManager
 from src.query.query_engine import RAGQueryEngine
+from src.metadata.filters import MetadataFilterBuilder
 
 # 页面配置
 st.set_page_config(
@@ -22,6 +24,8 @@ if "index" not in st.session_state:
     st.session_state.index = None
 if "query_engine" not in st.session_state:
     st.session_state.query_engine = None
+if "documents" not in st.session_state:
+    st.session_state.documents = []
 if "documents_loaded" not in st.session_state:
     st.session_state.documents_loaded = False
 if "enable_rerank" not in st.session_state:
@@ -32,6 +36,10 @@ if "compare_mode" not in st.session_state:
     st.session_state.compare_mode = False
 if "enable_streaming" not in st.session_state:
     st.session_state.enable_streaming = True
+if "metadata_filters" not in st.session_state:
+    st.session_state.metadata_filters = {}
+if "enable_metadata_filter" not in st.session_state:
+    st.session_state.enable_metadata_filter = False
 
 
 def load_documents():
@@ -46,6 +54,9 @@ def load_documents():
             if not documents:
                 st.warning(f"在 {settings.docs_dir} 目录中未找到文档")
                 return False
+
+        # 保存文档到 session state
+        st.session_state.documents = documents
 
         # 创建索引
         with st.spinner("正在创建向量索引..."):
@@ -69,14 +80,49 @@ def _create_query_engine():
     if st.session_state.index is None:
         return
 
+    # 构建元数据过滤器
+    metadata_filters = None
+    if st.session_state.enable_metadata_filter and st.session_state.metadata_filters:
+        filter_builder = MetadataFilterBuilder()
+        for field, value in st.session_state.metadata_filters.items():
+            if value:  # 只添加非空值
+                filter_builder.eq(field, value)
+        metadata_filters = filter_builder.build()
+
     query_engine = RAGQueryEngine(
         index=st.session_state.index,
         enable_rerank=st.session_state.enable_rerank,
         reranker_type=st.session_state.reranker_type,
         compare_mode=st.session_state.compare_mode,
-        streaming=st.session_state.enable_streaming
+        streaming=st.session_state.enable_streaming,
+        metadata_filters=metadata_filters
     )
     st.session_state.query_engine = query_engine
+
+
+def _get_available_metadata_fields() -> set:
+    """获取可用的元数据字段"""
+    if not st.session_state.documents:
+        return set()
+    fields = set()
+    for doc in st.session_state.documents:
+        fields.update(doc.metadata.keys())
+    return fields
+
+
+def _get_metadata_values(field: str) -> List:
+    """获取指定字段的所有唯一值"""
+    if not st.session_state.documents:
+        return []
+    values = set()
+    for doc in st.session_state.documents:
+        value = doc.metadata.get(field)
+        if value is not None:
+            if isinstance(value, list):
+                values.update(str(v) for v in value)
+            else:
+                values.add(str(value))
+    return sorted(list(values))
 
 
 def main():
@@ -178,6 +224,86 @@ def main():
             st.success("🟢 流式输出已启用")
         else:
             st.caption("🟡 流式输出未启用")
+
+        st.markdown("---")
+
+        # 元数据过滤配置
+        st.header("🏷️ 元数据过滤")
+
+        enable_metadata_filter = st.checkbox(
+            "启用元数据过滤",
+            value=st.session_state.enable_metadata_filter,
+            help="按文档元数据（分类、标签等）过滤检索结果"
+        )
+
+        if enable_metadata_filter and st.session_state.documents_loaded:
+            st.caption("可过滤字段：")
+
+            # 获取可用字段
+            available_fields = _get_available_metadata_fields()
+
+            # 常用字段优先显示
+            priority_fields = ["category", "author", "tags", "year", "file_type"]
+            other_fields = [f for f in available_fields if f not in priority_fields]
+
+            # 过滤掉不适合显示的字段
+            exclude_fields = {"file_path", "file_size", "created_date", "modified_date",
+                            "word_count", "char_count", "file_name"}
+            display_fields = [f for f in priority_fields + other_fields
+                            if f not in exclude_fields]
+
+            # 为每个字段创建选择器
+            for field in display_fields:
+                values = _get_metadata_values(field)
+                if values:
+                    # 获取当前值
+                    current_value = st.session_state.metadata_filters.get(field, "")
+
+                    # 根据值数量选择合适的控件
+                    if len(values) <= 5:
+                        # 少量选项用 selectbox
+                        options = [""] + values
+                        index = options.index(current_value) if current_value in options else 0
+                        new_value = st.selectbox(
+                            field,
+                            options=options,
+                            index=index,
+                            key=f"filter_{field}"
+                        )
+                    else:
+                        # 多量选项用 text_input + 建议
+                        new_value = st.text_input(
+                            field,
+                            value=current_value,
+                            key=f"filter_{field}",
+                            help=f"可选值: {', '.join(values[:5])}{'...' if len(values) > 5 else ''}"
+                        )
+
+                    # 更新过滤器
+                    if new_value:
+                        st.session_state.metadata_filters[field] = new_value
+                    elif field in st.session_state.metadata_filters:
+                        del st.session_state.metadata_filters[field]
+
+            # 显示当前过滤条件
+            if st.session_state.metadata_filters:
+                st.markdown("**当前过滤:**")
+                for field, value in st.session_state.metadata_filters.items():
+                    st.caption(f"  {field}: {value}")
+
+            # 应用过滤按钮
+            if st.button("🔄 应用过滤", use_container_width=True):
+                _create_query_engine()
+                st.success("过滤条件已应用")
+
+            # 清除过滤按钮
+            if st.button("❌ 清除过滤", use_container_width=True):
+                st.session_state.metadata_filters = {}
+                _create_query_engine()
+                st.success("过滤条件已清除")
+
+        # 保存状态
+        st.session_state.enable_metadata_filter = enable_metadata_filter
 
         st.markdown("---")
         st.caption("混合架构: Anthropic LLM (原生 SDK) + Ollama Embedding")
