@@ -55,6 +55,17 @@ class Settings:
         default_factory=lambda: int(os.getenv("TOP_K", "3"))
     )
 
+    # ========== Reranking 配置 ==========
+    enable_rerank: bool = field(
+        default_factory=lambda: os.getenv("ENABLE_RERANK", "false").lower() == "true"
+    )
+    reranker_type: str = field(
+        default_factory=lambda: os.getenv("RERANKER_TYPE", "keyword")
+    )
+    cohere_api_key: str = field(
+        default_factory=lambda: os.getenv("COHERE_API_KEY", "")
+    )
+
     def __post_init__(self):
         """初始化后验证"""
         if not self.anthropic_api_key:
