@@ -46,23 +46,30 @@ class HTTPMCPClient:
     def __init__(
         self,
         server_url: str = "http://127.0.0.1:8651",
+        mcp_server_path: Optional[str] = None,
         jadx_gui_path: Optional[str] = None,
-        on_status_update: Optional[Callable[[str], None]] = None
+        on_status_update: Optional[Callable[[str], None]] = None,
+        auto_start_server: bool = True
     ):
         """
         初始化 HTTP MCP 客户端
 
         Args:
             server_url: MCP Server HTTP 地址 (默认: http://127.0.0.1:8651)
+            mcp_server_path: jadx-mcp-server 目录路径（用于自动启动 Server）
             jadx_gui_path: jadx-gui 可执行文件路径
             on_status_update: 状态更新回调
+            auto_start_server: 是否自动启动 MCP Server（默认 True）
         """
         self.server_url = server_url.rstrip("/")
+        self.mcp_server_path = mcp_server_path
         self.jadx_gui_path = jadx_gui_path or self._find_jadx_gui()
         self.on_status_update = on_status_update or (lambda msg: None)
         self._request_id = 0
         self._current_apk: Optional[str] = None
         self._client: Optional[httpx.Client] = None
+        self._server_process: Optional[Any] = None
+        self._auto_start_server = auto_start_server
 
     def _find_jadx_gui(self) -> str:
         """查找 jadx-gui 可执行文件"""
@@ -93,8 +100,86 @@ class HTTPMCPClient:
         return "jadx-gui.exe" if is_windows else "jadx-gui"
 
     def start(self) -> bool:
-        """启动 MCP 客户端（HTTP 模式下只是验证连接）"""
+        """启动 MCP 客户端（HTTP 模式下验证连接，可选自动启动 Server）"""
         self.on_status_update(f"连接到 MCP Server: {self.server_url}")
+
+        # 如果启用了自动启动，先尝试连接，失败则启动 Server
+        if self._auto_start_server and self.mcp_server_path:
+            if not self._try_connect():
+                self.on_status_update("⚠️ MCP Server 未运行，尝试自动启动...")
+                if self._start_mcp_server():
+                    # 等待 Server 启动
+                    import time
+                    for i in range(10):  # 最多等待 10 秒
+                        time.sleep(1)
+                        if self._try_connect():
+                            self.on_status_update("✅ MCP Server 自动启动成功")
+                            return True
+                    self.on_status_update("❌ MCP Server 启动超时")
+                    return False
+                else:
+                    self.on_status_update("❌ 无法启动 MCP Server")
+                    return False
+
+        return self._try_connect()
+
+    def _try_connect(self) -> bool:
+        """尝试连接到 MCP Server"""
+        try:
+            self._client = httpx.Client(timeout=5.0)
+            tools = self.list_tools()
+            return tools is not None
+        except Exception:
+            if self._client:
+                self._client.close()
+                self._client = None
+            return False
+
+    def _start_mcp_server(self) -> bool:
+        """自动启动 MCP Server"""
+        import subprocess
+        import platform
+        import threading
+
+        server_dir = Path(self.mcp_server_path)
+        if not server_dir.exists():
+            self.on_status_update(f"❌ MCP Server 路径不存在: {self.mcp_server_path}")
+            return False
+
+        server_script = server_dir / "jadx_mcp_server.py"
+        if not server_script.exists():
+            self.on_status_update(f"❌ 找不到 jadx_mcp_server.py: {server_script}")
+            return False
+
+        # 构建启动命令
+        is_windows = platform.system() == "Windows"
+        if is_windows:
+            command = ["python", str(server_script), "--http", "--port", "8651"]
+        else:
+            command = ["uv", "--directory", str(server_dir), "run", "jadx_mcp_server.py", "--http", "--port", "8651"]
+
+        self.on_status_update(f"启动命令: {' '.join(command)}")
+
+        try:
+            # 在后台启动进程
+            if is_windows:
+                subprocess.Popen(
+                    command,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+                )
+            else:
+                subprocess.Popen(
+                    command,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True
+                )
+            return True
+        except Exception as e:
+            self.on_status_update(f"❌ 启动失败: {e}")
+            return False
 
         try:
             self._client = httpx.Client(timeout=60.0)
@@ -199,6 +284,9 @@ class HTTPMCPClient:
         if self._client:
             self._client.close()
             self._client = None
+
+        # 如果是我们启动的 Server，可以选择关闭（这里暂时不关闭，因为可能还有其他连接）
+        # self._server_process = None
 
     # ============ JMCPClient 兼容接口 ============
 
@@ -463,23 +551,27 @@ class HTTPMCPClient:
 # 使用示例
 def create_http_client(
     server_url: str = "http://127.0.0.1:8651",
-    mcp_server_dir: str = None,
-    jadx_gui_path: str = None
+    mcp_server_path: str = None,
+    jadx_gui_path: str = None,
+    auto_start_server: bool = True
 ) -> HTTPMCPClient:
     """
     创建 HTTP MCP 客户端
 
     Args:
         server_url: MCP Server HTTP 地址
-        mcp_server_dir: jadx-mcp-server 目录（用于启动 Server）
+        mcp_server_path: jadx-mcp-server 目录（用于自动启动 Server）
         jadx_gui_path: jadx-gui 可执行文件路径
+        auto_start_server: 是否自动启动 MCP Server（默认 True）
 
     Returns:
         HTTPMCPClient 实例
     """
     client = HTTPMCPClient(
         server_url=server_url,
-        jadx_gui_path=jadx_gui_path
+        mcp_server_path=mcp_server_path,
+        jadx_gui_path=jadx_gui_path,
+        auto_start_server=auto_start_server
     )
     client.start()
     return client

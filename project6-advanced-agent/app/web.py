@@ -93,12 +93,29 @@ def main():
         st.markdown("---")
         st.header("🔧 MCP 配置")
 
-        st.info("""
-        **使用流程（HTTP 模式）：**
-        1. 先启动 MCP Server: `cd /path/to/jadx-mcp-server && uv run jadx_mcp_server.py --http --port 8651`
-        2. 在 JADX-GUI 中打开 APK 文件（Plugin 会自动启动）
-        3. 然后点击下方"开始分析"按钮
-        """)
+        # MCP Server 路径配置（可选，用于自动启动）
+        auto_start_mcp = st.checkbox(
+            "自动启动 MCP Server",
+            value=True,
+            help="如果勾选，Agent 会自动启动 MCP Server（需要配置路径）"
+        )
+
+        if auto_start_mcp:
+            mcp_server_path = st.text_input(
+                "JADX MCP Server 目录",
+                value="/root/Learn/jadx-mcp-server",
+                placeholder="/path/to/jadx-mcp-server",
+                help="jadx-mcp-server 的目录路径（包含 jadx_mcp_server.py）"
+            )
+        else:
+            mcp_server_path = None
+            st.info("""
+            **手动启动 MCP Server:**
+            ```bash
+            cd /path/to/jadx-mcp-server
+            uv run jadx_mcp_server.py --http --port 8651
+            ```
+            """)
 
         mcp_server_url = st.text_input(
             "MCP Server URL",
@@ -211,6 +228,7 @@ def main():
                     # 创建 Agent
                     agent = create_apk_agent(
                         mcp_server_url=mcp_server_url,
+                        mcp_server_path=mcp_server_path if auto_start_mcp else None,
                         jadx_gui_path=jadx_gui_path if jadx_gui_path else None,
                         enable_rag=enable_rag,
                         enable_advanced=enable_advanced,
