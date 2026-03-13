@@ -1,7 +1,5 @@
 """
 JADX MCP 客户端模块 (使用官方 MCP SDK)
-
-正确使用 stdio_client async context manager
 """
 import asyncio
 import re
@@ -24,7 +22,6 @@ class StdioMCPClient:
     MCP stdio 客户端 (使用官方 MCP SDK)
     """
 
-    # 危险权限列表
     DANGEROUS_PERMISSIONS = {
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -55,7 +52,8 @@ class StdioMCPClient:
         self.on_status_update = on_status_update or (lambda msg: None)
         self._current_apk: Optional[str] = None
         self._session: Optional[ClientSession] = None
-        self._stdio_streams: Any = None
+        self._read_stream: Any = None
+        self._write_stream: Any = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._loop_thread: Optional[threading.Thread] = None
 
@@ -83,26 +81,11 @@ class StdioMCPClient:
 
         return "jadx-gui.exe" if is_windows else "jadx-gui"
 
-    def _run_async(self, coro):
-        """在事件循环中运行异步代码"""
-        if self._loop and self._loop.is_running():
-            # 如果循环正在运行，创建任务
-            future = asyncio.run_coroutine_threadsafe(coro, self._loop)
-            return future.result(timeout=60)
-        else:
-            # 如果没有循环，创建新的
-            loop = asyncio.new_event_loop()
-            try:
-                return loop.run_until_complete(coro)
-            finally:
-                loop.close()
-
     def start(self) -> bool:
         """启动 MCP Server 并创建会话"""
         self.on_status_update("启动 MCP Server...")
 
         try:
-            # 构建服务器参数
             server_params = StdioServerParameters(
                 command=self.server_command[0],
                 args=self.server_command[1:] if len(self.server_command) > 1 else []
@@ -115,14 +98,15 @@ class StdioMCPClient:
                 daemon=True
             )
             self._loop_thread.start()
-            time.sleep(0.5)  # 等待循环启动
+            time.sleep(0.5)
 
             # 初始化会话
             def init_session():
                 async def create():
-                    async with stdio_client(server_params) as streams:
-                        self._stdio_streams = streams
-                        self._session = ClientSession(streams)
+                    async with stdio_client(server_params) as (read_stream, write_stream):
+                        self._read_stream = read_stream
+                        self._write_stream = write_stream
+                        self._session = ClientSession(read_stream, write_stream)
                         await self._session.initialize()
                         # 保持会话活跃
                         await asyncio.sleep(float('inf'))
@@ -133,7 +117,7 @@ class StdioMCPClient:
                 )
 
             init_session()
-            time.sleep(3)  # 等待会话初始化
+            time.sleep(3)
 
             if self._session:
                 self.on_status_update("✅ MCP Server 已连接")
@@ -166,7 +150,8 @@ class StdioMCPClient:
             return result
 
         try:
-            return self._run_async(_call())
+            future = asyncio.run_coroutine_threadsafe(_call(), self._loop)
+            return future.result(timeout=60)
         except Exception as e:
             logger.error(f"工具调用失败 {tool_name}: {e}")
             return None
@@ -178,7 +163,6 @@ class StdioMCPClient:
 
         async def _list():
             tools_result = await self._session.list_tools()
-            # 转换为字典列表，包含参数信息
             result = []
             for tool in tools_result.tools:
                 result.append({
@@ -189,7 +173,8 @@ class StdioMCPClient:
             return result
 
         try:
-            return self._run_async(_list())
+            future = asyncio.run_coroutine_threadsafe(_list(), self._loop)
+            return future.result(timeout=10)
         except Exception as e:
             logger.error(f"列出工具失败: {e}")
             return []
@@ -197,7 +182,6 @@ class StdioMCPClient:
     def close(self):
         """关闭 MCP Server"""
         if self._loop and self._loop.is_running():
-            # 停止事件循环（这会结束 asyncio.sleep(float('inf'))）
             self._loop.call_soon_threadsafe(self._loop.stop)
             self._loop = None
 
@@ -205,7 +189,8 @@ class StdioMCPClient:
             self._loop_thread.join(timeout=2)
 
         self._session = None
-        self._stdio_streams = None
+        self._read_stream = None
+        self._write_stream = None
 
     # ============ JMCPClient 兼容接口 ============
 
