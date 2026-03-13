@@ -139,52 +139,58 @@ class StdioMCPClient:
 
     def start(self) -> bool:
         """启动 MCP 客户端"""
-        with self._connection_lock:
-            if self._is_connected:
+        # 快速检查：如果已经连接，直接返回
+        if self._is_connected and self._loop is not None:
+            return True
+
+        # 防止重复启动
+        if self._loop is not None:
+            self.on_status_update("⚠️ MCP 已经在启动中或已启动")
+            return self._is_connected
+
+        self.on_status_update("启动 MCP Server...")
+
+        # 先清理可能存在的旧进程
+        self._cleanup_old_processes()
+
+        try:
+            # 创建事件循环线程
+            self._loop = asyncio.new_event_loop()
+            self._loop_thread = threading.Thread(
+                target=self._run_event_loop,
+                daemon=True
+            )
+            self._loop_thread.start()
+            time.sleep(0.5)
+
+            # 在事件循环中启动服务器和初始化
+            def init():
+                async def _init():
+                    await self._start_server()
+                    await self._initialize()
+
+                asyncio.run_coroutine_threadsafe(_init(), self._loop)
+
+            init()
+            time.sleep(5)  # 等待初始化完成
+
+            # 验证连接
+            tools = self.list_tools()
+            if tools and len(tools) > 0:
+                self.on_status_update(f"✅ MCP Server 已连接 ({len(tools)} 个工具)")
+                self._is_connected = True
                 return True
-
-            self.on_status_update("启动 MCP Server...")
-
-            # 先清理可能存在的旧进程
-            self._cleanup_old_processes()
-
-            try:
-                # 创建事件循环线程
-                self._loop = asyncio.new_event_loop()
-                self._loop_thread = threading.Thread(
-                    target=self._run_event_loop,
-                    daemon=True
-                )
-                self._loop_thread.start()
-                time.sleep(0.5)
-
-                # 在事件循环中启动服务器和初始化
-                def init():
-                    async def _init():
-                        await self._start_server()
-                        await self._initialize()
-
-                    asyncio.run_coroutine_threadsafe(_init(), self._loop)
-
-                init()
-                time.sleep(5)  # 等待初始化完成
-
-                # 验证连接
-                tools = self.list_tools()
-                if tools and len(tools) > 0:
-                    self.on_status_update(f"✅ MCP Server 已连接 ({len(tools)} 个工具)")
-                    self._is_connected = True
-                    return True
-                else:
-                    # 工具为空不代表失败，可能只是 JADX 插件还没加载项目
-                    self.on_status_update("⚠️ MCP Server 已启动，等待 JADX 加载项目...")
-                    self._is_connected = True
-                    return True
-            except Exception as e:
-                self.on_status_update(f"❌ 启动失败: {e}")
-                logger.error(f"启动失败: {e}", exc_info=True)
-                self._is_connected = False
-                return False
+            else:
+                # 工具为空不代表失败，可能只是 JADX 插件还没加载项目
+                self.on_status_update("⚠️ MCP Server 已启动，等待 JADX 加载项目...")
+                self._is_connected = True
+                return True
+        except Exception as e:
+            self.on_status_update(f"❌ 启动失败: {e}")
+            logger.error(f"启动失败: {e}", exc_info=True)
+            self._is_connected = False
+            self._loop = None  # 清理失败的 loop
+            return False
 
     def _cleanup_old_processes(self):
         """清理可能存在的旧 MCP Server 进程"""
@@ -229,10 +235,9 @@ class StdioMCPClient:
 
     def connect(self) -> bool:
         """连接到 MCP Server（幂等操作）"""
-        with self._connection_lock:
-            if self._is_connected:
-                return True
-            return self.start()
+        if self._is_connected:
+            return True
+        return self.start()
 
     async def _call_tool_async(self, tool_name: str, params: Dict[str, Any]) -> Any:
         """异步调用工具"""
@@ -249,19 +254,14 @@ class StdioMCPClient:
 
     def call_tool(self, tool_name: str, params: Dict[str, Any]) -> Any:
         """调用 MCP 工具（同步包装）"""
-        self.on_status_update(f"[call_tool] 调用工具: {tool_name}")
-
-        if not self._loop:
-            # 尝试自动重连
-            self.on_status_update("[call_tool] _loop 为 None，尝试重新连接...")
-            if not self._is_connected:
-                self.on_status_update("⚠️ MCP 未连接，尝试重新连接...")
-                if not self.start():
-                    logger.error("无法连接到 MCP Server")
-                    return None
+        # 检查连接状态，如果未连接则尝试连接
+        if not self._is_connected or self._loop is None:
+            self.on_status_update("⚠️ MCP 未连接，尝试重新连接...")
+            if not self.start():
+                logger.error("无法连接到 MCP Server")
+                return None
 
         try:
-            self.on_status_update(f"[call_tool] 发送异步请求...")
             future = asyncio.run_coroutine_threadsafe(
                 self._call_tool_async(tool_name, params),
                 self._loop
@@ -270,7 +270,7 @@ class StdioMCPClient:
         except Exception as e:
             logger.error(f"工具调用失败 {tool_name}: {e}")
             # 如果是连接相关错误，标记为未连接
-            if "Server 未运行" in str(e) or "Future" in str(e):
+            if "Server 未运行" in str(e) or "Future" in str(e) or "not running" in str(e):
                 self._is_connected = False
             return None
 
@@ -310,33 +310,33 @@ class StdioMCPClient:
 
     def close(self):
         """关闭 MCP Server"""
-        with self._connection_lock:
-            self._is_connected = False
+        self._is_connected = False
 
-            # 终止 MCP Server 进程
-            if self._process:
-                try:
-                    self._process.terminate()
-                    # 等待进程结束
+        # 终止 MCP Server 进程
+        if self._process:
+            try:
+                self._process.terminate()
+                # 等待进程结束
+                if self._loop:
                     asyncio.run_coroutine_threadsafe(
                         self._process.wait(),
                         self._loop
                     )
+            except:
+                try:
+                    self._process.kill()
                 except:
-                    try:
-                        self._process.kill()
-                    except:
-                        pass
-                self._process = None
+                    pass
+            self._process = None
 
-            # 停止事件循环
-            if self._loop and self._loop.is_running():
-                self._loop.call_soon_threadsafe(self._loop.stop)
+        # 停止事件循环
+        if self._loop and self._loop.is_running():
+            self._loop.call_soon_threadsafe(self._loop.stop)
 
-            if self._loop_thread and self._loop_thread.is_alive():
-                self._loop_thread.join(timeout=2)
+        if self._loop_thread and self._loop_thread.is_alive():
+            self._loop_thread.join(timeout=2)
 
-            self._loop = None
+        self._loop = None
 
     def _next_id(self) -> int:
         """生成下一个请求 ID"""
