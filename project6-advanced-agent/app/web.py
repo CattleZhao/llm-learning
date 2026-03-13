@@ -26,6 +26,9 @@ st.set_page_config(
     layout="wide"
 )
 
+# 设置文件上传大小限制 (默认 200MB，这里设置为 1GB)
+st.set_option('server.maxUploadSize', 1000)
+
 # 自定义 CSS
 st.markdown("""
 <style>
