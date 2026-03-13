@@ -11,6 +11,7 @@ import re
 import time
 import threading
 import platform
+import select
 from typing import Any, Dict, List, Optional, Callable
 from pathlib import Path
 from urllib.parse import urlparse
@@ -118,6 +119,16 @@ class StdioMCPClient:
                 bufsize=0
             )
 
+            # 等待一小段时间让进程启动
+            time.sleep(2)
+
+            # 检查进程是否仍在运行
+            if self.process.poll() is not None:
+                # 进程已退出，读取错误信息
+                stderr_output = self.process.stderr.read() if self.process.stderr else ""
+                self.on_status_update(f"❌ MCP Server 启动失败: {stderr_output[:200]}")
+                return False
+
             # 发送初始化请求
             self._send_request({
                 "jsonrpc": "2.0",
@@ -133,13 +144,16 @@ class StdioMCPClient:
                 }
             })
 
-            # 等待响应
-            response = self._read_response()
+            # 等待响应（带超时）
+            response = self._read_response(timeout=10)
             if response and response.get("result"):
                 self.on_status_update("✅ MCP Server 已连接")
                 return True
 
-            return False
+            # 没有收到有效响应
+            self.on_status_update("⚠️ MCP Server 无响应，可能使用非 stdio 模式")
+            # 不关闭进程，继续尝试
+            return True
 
         except Exception as e:
             self.on_status_update(f"❌ 启动失败: {e}")
@@ -164,12 +178,19 @@ class StdioMCPClient:
         self.process.stdin.write(message + "\n")
         self.process.stdin.flush()
 
-    def _read_response(self) -> Optional[Dict[str, Any]]:
-        """从 MCP Server 读取响应"""
+    def _read_response(self, timeout: float = 5.0) -> Optional[Dict[str, Any]]:
+        """从 MCP Server 读取响应（带超时）"""
         if not self.process or not self.process.stdout:
             return None
 
         try:
+            # 使用 select 实现超时（仅 Unix）
+            if hasattr(select, 'select'):
+                ready, _, _ = select.select([self.process.stdout], [], [], timeout)
+                if not ready:
+                    logger.warning(f"读取响应超时 ({timeout}s)")
+                    return None
+
             line = self.process.stdout.readline()
             if not line:
                 return None
@@ -180,6 +201,9 @@ class StdioMCPClient:
 
         except json.JSONDecodeError as e:
             logger.error(f"解析响应失败: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"读取响应异常: {e}")
             return None
 
     def call_tool(self, tool_name: str, params: Dict[str, Any]) -> Any:
