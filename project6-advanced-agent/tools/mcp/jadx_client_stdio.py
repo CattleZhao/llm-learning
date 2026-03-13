@@ -108,9 +108,13 @@ class StdioMCPClient:
             # 在事件循环中初始化会话
             def init_session():
                 async def create():
+                    self.on_status_update("[调试] 正在连接 MCP Server...")
                     async with stdio_client(self._server_params) as (read_stream, write_stream):
+                        self.on_status_update("[调试] stdio_client 连接成功")
                         self._session = ClientSession(read_stream, write_stream)
+                        self.on_status_update("[调试] ClientSession 创建成功")
                         await self._session.initialize()
+                        self.on_status_update("[调试] Session 初始化成功")
                         # 等待停止信号，保持会话活跃
                         await self._stop_event.wait()
                         # 清理
@@ -119,13 +123,13 @@ class StdioMCPClient:
                 asyncio.run_coroutine_threadsafe(create(), self._loop)
 
             init_session()
-            time.sleep(3)  # 等待会话初始化
+            time.sleep(4)  # 等待会话初始化
 
             if self._session:
                 self.on_status_update("✅ MCP Server 已连接")
                 return True
             else:
-                self.on_status_update("❌ MCP Server 启动失败")
+                self.on_status_update("❌ MCP Server 启动失败 - session 未创建")
                 return False
 
         except Exception as e:
@@ -161,10 +165,14 @@ class StdioMCPClient:
     def list_tools(self) -> List[Dict[str, Any]]:
         """获取可用的工具列表（同步包装）"""
         if not self._session:
+            self.on_status_update("[调试] session 未初始化")
             return []
+
+        self.on_status_update("[调试] 正在调用 session.list_tools()...")
 
         async def _list():
             tools_result = await self._session.list_tools()
+            self.on_status_update(f"[调试] list_tools 返回 {len(tools_result.tools)} 个工具")
             result = []
             for tool in tools_result.tools:
                 result.append({
@@ -176,9 +184,16 @@ class StdioMCPClient:
 
         try:
             future = asyncio.run_coroutine_threadsafe(_list(), self._loop)
-            return future.result(timeout=10)
+            result = future.result(timeout=10)
+            self.on_status_update(f"[调试] list_tools 完成，返回 {len(result)} 个工具")
+            return result
+        except asyncio.TimeoutError:
+            self.on_status_update("[错误] list_tools 超时")
+            logger.error(f"列出工具超时")
+            return []
         except Exception as e:
-            logger.error(f"列出工具失败: {e}")
+            self.on_status_update(f"[错误] list_tools 失败: {e}")
+            logger.error(f"列出工具失败: {e}", exc_info=True)
             return []
 
     def close(self):

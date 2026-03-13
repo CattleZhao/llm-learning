@@ -22,7 +22,7 @@ def show_tool_params(mcp_server_path: str = "/root/Learn/jadx-mcp-server"):
     if platform.system() == "Windows":
         command = ["python", str(Path(mcp_server_path) / "jadx_mcp_server.py")]
     else:
-        command = ["uv", "--directory", mcp_server_path, "run", "jadx_mcp_server.py"]
+        command = ["python3", str(Path(mcp_server_path) / "jadx_mcp_server.py")]
 
     client = StdioMCPClient(
         server_command=command,
@@ -31,7 +31,16 @@ def show_tool_params(mcp_server_path: str = "/root/Learn/jadx-mcp-server"):
     client.connect()
 
     # 获取所有工具
-    tools = client.list_tools()
+    print("\n[调试] 正在获取工具列表...")
+    try:
+        tools = client.list_tools()
+        print(f"[调试] list_tools 返回类型: {type(tools)}, 长度: {len(tools) if tools else 0}")
+    except Exception as e:
+        print(f"[错误] list_tools 异常: {e}")
+        import traceback
+        traceback.print_exc()
+        tools = []
+
     print(f"\n找到 {len(tools)} 个工具\n")
 
     for tool in tools:
