@@ -103,8 +103,8 @@ def main():
 
         mcp_server_url = st.text_input(
             "MCP Server 地址",
-            value="http://localhost:3000",
-            placeholder="http://localhost:3000",
+            value="http://localhost:8650",
+            placeholder="http://localhost:8650",
             help="JADX MCP Server 的 HTTP 地址"
         )
 

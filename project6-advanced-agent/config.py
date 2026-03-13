@@ -54,7 +54,7 @@ class Settings:
 
     # ========== JADX 配置 ==========
     jadx_mcp_server_url: str = field(
-        default_factory=lambda: os.getenv("JADX_MCP_SERVER_URL", "http://localhost:3000")
+        default_factory=lambda: os.getenv("JADX_MCP_SERVER_URL", "http://localhost:8650")
     )
     jadx_gui_path: Optional[str] = field(
         default_factory=lambda: os.getenv("JADX_GUI_PATH")

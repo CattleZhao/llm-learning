@@ -51,7 +51,7 @@ class JMCPClient:
 
     def __init__(
         self,
-        mcp_server_url: str = "http://localhost:3000",
+        mcp_server_url: str = "http://localhost:8650",
         jadx_gui_path: Optional[str] = None,
         on_status_update: Optional[Callable[[str], None]] = None
     ):
