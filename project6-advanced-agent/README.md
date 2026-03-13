@@ -241,26 +241,42 @@ JADX_GUI_PATH=~/jadx/jadx-gui                     # JADX-GUI 路径
 
 ### 6. 启动服务
 
-**重要：使用前必须先启动 JADX-GUI 中的 MCP Plugin**
-
-1. 启动 JADX-GUI
-2. 在菜单中找到 MCP Plugin 设置
-3. 配置并启动 MCP Plugin（记下监听端口）
-
-#### 方式一：使用启动脚本（推荐）
-
-```bash
-# Linux/Mac
-./start.sh
-
-# Windows
-start.bat
+**HTTP 模式架构：**
+```
+┌──────────────┐     HTTP       ┌──────────────────┐
+│ 我们的 Agent │ ←─────────────→ │  MCP Server      │
+│  (Project 6) │   :8651         │ (HTTP Mode)      │
+└──────────────┘                  └────────┬─────────┘
+                                           │ HTTP
+                                           ▼
+                                  ┌─────────────────┐
+                                  │  JADX AI MCP    │
+                                  │  Plugin (:8650) │
+                                  └─────────────────┘
 ```
 
-#### 方式二：手动启动
+#### 步骤 1：启动 MCP Server（HTTP 模式）
 
 ```bash
-# 直接启动 Web UI（MCP Server 会自动通过 stdio 启动）
+# 终端 1：启动 MCP Server
+cd /path/to/jadx-mcp-server
+uv run jadx_mcp_server.py --http --port 8651
+
+# 你会看到：
+# [JADX AI MCP Server] v3.3.5 | MCP Port: 8651 | JADX Port: 8650
+# Testing JADX AI MCP Plugin connectivity...
+# Health check result: ... (需要 JADX-GUI 已启动 Plugin)
+```
+
+#### 步骤 2：启动 JADX-GUI 并打开 APK
+
+1. 启动 JADX-GUI（Plugin 会自动启动）
+2. 打开你要分析的 APK 文件
+
+#### 步骤 3：启动 Web UI
+
+```bash
+# 终端 2：启动 Web UI
 cd project6-advanced-agent
 streamlit run app/web.py
 ```
@@ -268,6 +284,9 @@ streamlit run app/web.py
 ### 7. 运行演示
 
 ```bash
+# 测试 MCP HTTP 连接
+python test_mcp_http.py
+
 # 查看规则加载演示
 python demo.py
 ```
@@ -295,9 +314,9 @@ streamlit run app/web.py
 ```python
 from agents.apk_agent import create_apk_agent
 
-# 创建 Agent（需要指定 jadx-mcp-server 目录路径）
+# 创建 Agent（HTTP 模式）
 agent = create_apk_agent(
-    mcp_server_path="/path/to/jadx-mcp-server"
+    mcp_server_url="http://127.0.0.1:8651"
 )
 
 # 分析 APK
@@ -314,9 +333,9 @@ from agents.apk_agent import create_apk_agent
 def on_status(msg):
     print(f"[状态] {msg}")
 
-# 创建 Agent（带回调）
+# 创建 Agent（HTTP 模式 + 回调）
 agent = create_apk_agent(
-    mcp_server_path="/path/to/jadx-mcp-server",
+    mcp_server_url="http://127.0.0.1:8651",
     on_status_update=on_status
 )
 
