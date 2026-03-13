@@ -1,5 +1,7 @@
 """
 JADX MCP 客户端模块 (使用官方 MCP SDK)
+
+正确处理 async context manager 和会话生命周期
 """
 import asyncio
 import re
@@ -52,10 +54,10 @@ class StdioMCPClient:
         self.on_status_update = on_status_update or (lambda msg: None)
         self._current_apk: Optional[str] = None
         self._session: Optional[ClientSession] = None
-        self._read_stream: Any = None
-        self._write_stream: Any = None
+        self._server_params: Optional[StdioServerParameters] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._loop_thread: Optional[threading.Thread] = None
+        self._stop_event: Optional[asyncio.Event] = None
 
     def _find_jadx_gui(self) -> str:
         """查找 jadx-gui 可执行文件"""
@@ -86,13 +88,16 @@ class StdioMCPClient:
         self.on_status_update("启动 MCP Server...")
 
         try:
-            server_params = StdioServerParameters(
+            self._server_params = StdioServerParameters(
                 command=self.server_command[0],
                 args=self.server_command[1:] if len(self.server_command) > 1 else []
             )
 
-            # 创建事件循环线程
+            # 创建事件循环和停止信号
+            self._stop_event = asyncio.Event()
             self._loop = asyncio.new_event_loop()
+
+            # 启动事件循环线程
             self._loop_thread = threading.Thread(
                 target=self._run_event_loop,
                 daemon=True
@@ -100,24 +105,21 @@ class StdioMCPClient:
             self._loop_thread.start()
             time.sleep(0.5)
 
-            # 初始化会话
+            # 在事件循环中初始化会话
             def init_session():
                 async def create():
-                    async with stdio_client(server_params) as (read_stream, write_stream):
-                        self._read_stream = read_stream
-                        self._write_stream = write_stream
+                    async with stdio_client(self._server_params) as (read_stream, write_stream):
                         self._session = ClientSession(read_stream, write_stream)
                         await self._session.initialize()
-                        # 保持会话活跃
-                        await asyncio.sleep(float('inf'))
+                        # 等待停止信号，保持会话活跃
+                        await self._stop_event.wait()
+                        # 清理
+                        await self._session.close()
 
-                asyncio.run_coroutine_threadsafe(
-                    create(),
-                    self._loop
-                )
+                asyncio.run_coroutine_threadsafe(create(), self._loop)
 
             init_session()
-            time.sleep(3)
+            time.sleep(3)  # 等待会话初始化
 
             if self._session:
                 self.on_status_update("✅ MCP Server 已连接")
@@ -181,16 +183,20 @@ class StdioMCPClient:
 
     def close(self):
         """关闭 MCP Server"""
+        if self._stop_event:
+            # 发送停止信号
+            self._loop.call_soon_threadsafe(self._stop_event.set)
+            self._stop_event = None
+
         if self._loop and self._loop.is_running():
+            # 停止事件循环
             self._loop.call_soon_threadsafe(self._loop.stop)
-            self._loop = None
 
         if self._loop_thread and self._loop_thread.is_alive():
-            self._loop_thread.join(timeout=2)
+            self._loop_thread.join(timeout=3)
 
         self._session = None
-        self._read_stream = None
-        self._write_stream = None
+        self._loop = None
 
     # ============ JMCPClient 兼容接口 ============
 
