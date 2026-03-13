@@ -154,7 +154,9 @@ com/.*\\.loader/.*          // 中间匹配
 ### 环境要求
 
 - Python 3.9+
-- jadx 或 jadx-gui（用于 APK 反编译）
+- jadx-gui（用于打开和反编译 APK）
+- jadx-mcp-server（用于 MCP 通信）
+- uv（用于运行 jadx-mcp-server）
 
 ### 1. 安装依赖
 
@@ -164,8 +166,6 @@ pip install -r requirements.txt
 ```
 
 ### 2. 安装 JADX
-
-#### 方式一：下载预编译版本（推荐）
 
 ```bash
 # Linux/Mac
@@ -177,27 +177,56 @@ unzip jadx-1.5.0.zip -d ~/jadx
 # 解压到 C:\jadx
 ```
 
-#### 方式二：添加到 PATH
+### 3. 安装 JADX MCP Server
 
 ```bash
-# Linux/Mac
-export PATH=$PATH:~/jadx/jadx-1.5.0
+# 克隆 jadx-mcp-server
+git clone https://github.com/skylot/jadx-mcp-server.git ~/jadx-mcp-server
 
-# Windows - 添加到系统 PATH
-# C:\jadx\jadx-1.5.0
+# 或者下载后解压到指定目录
 ```
 
-### 3. 配置环境变量（可选）
+### 4. 安装 uv
+
+```bash
+pip install uv
+```
+
+### 5. 配置环境变量
 
 ```bash
 cp .env.example .env
 
-# 编辑 .env 文件，配置 JADX 路径
-# JADX_GUI_PATH=~/jadx/jadx-1.5.0/bin/jadx-gui    # Linux/Mac
-# JADX_GUI_PATH=C:\jadx\jadx-gui.exe              # Windows
+# 编辑 .env 文件
+JADX_MCP_SERVER_PATH=/path/to/jadx-mcp-server    # MCP Server 目录
+JADX_GUI_PATH=~/jadx/jadx-gui                     # JADX-GUI 路径
 ```
 
-### 4. 运行演示
+### 6. 启动服务
+
+#### 方式一：使用启动脚本（推荐）
+
+```bash
+# Linux/Mac
+./start.sh
+
+# Windows
+start.bat
+```
+
+#### 方式二：手动启动
+
+```bash
+# 终端 1: 启动 MCP Server
+cd /path/to/jadx-mcp-server
+uv run jadx_mcp_server.py
+
+# 终端 2: 启动 Web UI
+cd project6-advanced-agent
+streamlit run app/web.py
+```
+
+### 7. 运行演示
 
 ```bash
 # 查看规则加载演示
