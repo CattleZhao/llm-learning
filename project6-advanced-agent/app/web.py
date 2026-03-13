@@ -62,15 +62,14 @@ def main():
     """, unsafe_allow_html=True)
 
     # 初始化 session state
-    if "analysis_status" not in st.session_state:
-        st.session_state.analysis_status = []
     if "analysis_result" not in st.session_state:
         st.session_state.analysis_result = None
+    if "analysis_status" not in st.session_state:
+        st.session_state.analysis_status = []
 
-    # 状态更新回调
+    # 状态更新回调（仅记录，不触发 rerun）
     def update_status(msg: str):
         st.session_state.analysis_status.append(msg)
-        st.rerun()
 
     # 侧边栏 - 配置
     with st.sidebar:
@@ -139,11 +138,12 @@ def main():
     # 主区域
     st.markdown("---")
 
-    # 状态显示区域
-    if st.session_state.analysis_status:
+    # 状态显示区域（分析完成后显示）
+    if st.session_state.analysis_status and st.session_state.analysis_result:
         st.header("📊 分析进度")
         for status in st.session_state.analysis_status:
             st.markdown(f"<div class='status-box'>{status}</div>", unsafe_allow_html=True)
+        st.markdown("---")
 
     # 文件上传区域
     st.header("📁 选择 APK 文件")
@@ -191,33 +191,37 @@ def main():
                 st.session_state.analysis_status = []
                 st.session_state.analysis_result = None
 
-                # 创建 Agent
-                agent = create_apk_agent(
-                    mcp_server_path=mcp_server_path,
-                    jadx_gui_path=jadx_gui_path if jadx_gui_path else None,
-                    enable_rag=enable_rag,
-                    enable_advanced=enable_advanced,
-                    on_status_update=update_status
-                )
-
-                # 执行分析
-                start_time = time.time()
-
-                try:
-                    response = agent.think(
-                        f"请分析 APK 文件: {apk_path}",
-                        context={"apk_path": str(apk_path)}
+                with st.spinner("正在分析 APK..."):
+                    # 创建 Agent
+                    agent = create_apk_agent(
+                        mcp_server_path=mcp_server_path,
+                        jadx_gui_path=jadx_gui_path if jadx_gui_path else None,
+                        enable_rag=enable_rag,
+                        enable_advanced=enable_advanced,
+                        on_status_update=update_status
                     )
 
-                    elapsed_time = time.time() - start_time
+                    # 执行分析
+                    start_time = time.time()
 
-                    update_status(f"✅ 分析完成！(耗时: {elapsed_time:.2f} 秒)")
-                    st.session_state.analysis_result = response
+                    try:
+                        response = agent.think(
+                            f"请分析 APK 文件: {apk_path}",
+                            context={"apk_path": str(apk_path)}
+                        )
 
-                except Exception as e:
-                    update_status(f"❌ 分析失败: {str(e)}")
-                    with st.expander("查看错误详情"):
-                        st.code(str(e), language="python")
+                        elapsed_time = time.time() - start_time
+
+                        update_status(f"✅ 分析完成！(耗时: {elapsed_time:.2f} 秒)")
+                        st.session_state.analysis_result = response
+                        st.rerun()
+
+                    except Exception as e:
+                        update_status(f"❌ 分析失败: {str(e)}")
+                        st.error(f"分析失败: {e}")
+                        with st.expander("查看错误详情"):
+                            st.code(str(e), language="python")
+                        st.rerun()
 
         with col2:
             if st.button("🗑️ 清除", use_container_width=True):

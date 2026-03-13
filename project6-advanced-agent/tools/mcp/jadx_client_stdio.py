@@ -110,13 +110,20 @@ class StdioMCPClient:
         self.on_status_update("启动 MCP Server...")
 
         try:
+            # Windows 上使用 CREATE_NO_WINDOW 避免弹出窗口
+            startupinfo = None
+            if platform.system() == "Windows":
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+
             self.process = subprocess.Popen(
                 self.server_command,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                bufsize=0
+                bufsize=0,
+                startupinfo=startupinfo
             )
 
             # 等待一小段时间让进程启动
@@ -411,7 +418,8 @@ class StdioMCPClient:
 # 使用示例
 def create_stdio_client(
     mcp_server_dir: str,
-    uv_path: str = "uv"
+    uv_path: str = "uv",
+    python_path: str = "python"
 ) -> StdioMCPClient:
     """
     创建 stdio MCP 客户端
@@ -419,17 +427,27 @@ def create_stdio_client(
     Args:
         mcp_server_dir: jadx-mcp-server 目录
         uv_path: uv 可执行文件路径
+        python_path: Python 可执行文件路径（Windows 备用）
 
     Returns:
         StdioMCPClient 实例
     """
-    command = [
-        uv_path,
-        "--directory",
-        mcp_server_dir,
-        "run",
-        "jadx_mcp_server.py"
-    ]
+    import sys
+
+    # Windows 上优先使用 Python 直接运行
+    if platform.system() == "Windows":
+        command = [
+            python_path,
+            str(Path(mcp_server_dir) / "jadx_mcp_server.py")
+        ]
+    else:
+        command = [
+            uv_path,
+            "--directory",
+            mcp_server_dir,
+            "run",
+            "jadx_mcp_server.py"
+        ]
 
     client = StdioMCPClient(server_command=command)
     client.start()

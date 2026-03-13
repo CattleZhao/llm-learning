@@ -49,7 +49,13 @@ class APKAnalysisAgent(BaseAgent):
         self.enable_rag = enable_rag
 
         # 初始化 MCP 客户端 (stdio 方式)
-        command = ["uv", "--directory", mcp_server_path, "run", "jadx_mcp_server.py"]
+        # Windows 上使用 Python 直接运行，避免 WSAStartup 错误
+        import platform
+        if platform.system() == "Windows":
+            command = ["python", str(Path(mcp_server_path) / "jadx_mcp_server.py")]
+        else:
+            command = ["uv", "--directory", mcp_server_path, "run", "jadx_mcp_server.py"]
+
         self.mcp_client = StdioMCPClient(
             server_command=command,
             jadx_gui_path=jadx_gui_path,
