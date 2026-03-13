@@ -244,15 +244,22 @@ class RuleLoader:
         print(f"[Info] 已保存 {len(self.rules)} 条规则到 {output_path}")
 
 
+# 全局单例
+_rule_loader = None
+
+
 # 便捷函数
 def get_rule_loader(rules_dir: str = "knowledge_base/raw/rules") -> RuleLoader:
     """
-    获取规则加载器实例
+    获取规则加载器实例（单例模式）
 
     Args:
-        rules_dir: 规则目录路径
+        rules_dir: 规则目录路径（仅在首次调用时生效）
 
     Returns:
         RuleLoader 实例
     """
-    return RuleLoader(rules_dir)
+    global _rule_loader
+    if _rule_loader is None:
+        _rule_loader = RuleLoader(rules_dir)
+    return _rule_loader

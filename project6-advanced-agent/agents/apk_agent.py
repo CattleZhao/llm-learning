@@ -65,14 +65,19 @@ class APKAnalysisAgent(BaseAgent):
         # 这样可以确保 JADX 插件已经启动
 
         # 获取知识库
+        self.on_status_update("加载知识库...")
         self.knowledge_base = get_knowledge_base()
+
+        self.on_status_update("加载规则...")
         self.rule_loader = get_rule_loader()
 
         # 创建反思检查器
+        self.on_status_update("初始化反思检查器...")
         self.reflection_checker = create_reflection_checker(enable_advanced_analysis)
 
         # 当前分析状态
         self.current_analysis: Dict[str, Any] = {}
+        self.on_status_update("✅ Agent 初始化完成")
 
     def think(
         self,
