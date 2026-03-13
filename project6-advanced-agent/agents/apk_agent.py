@@ -80,7 +80,9 @@ class APKAnalysisAgent(BaseAgent):
         context: Optional[Dict] = None
     ) -> AgentResponse:
         """执行 APK 分析"""
+        self.on_status_update("🚀 开始分析...")
         apk_path = self._extract_apk_path(input_text, context)
+        self.on_status_update(f"📁 APK 路径: {apk_path}")
 
         if not apk_path:
             return AgentResponse(
@@ -119,23 +121,31 @@ class APKAnalysisAgent(BaseAgent):
 
     def _analyze_apk(self, apk_path: str):
         """执行完整的 APK 分析（9步）"""
+        self.on_status_update(f"🔍 开始分析 APK: {Path(apk_path).name}")
+
         # 1. 在 JADX-GUI 中打开 APK（如果配置了 jadx_gui_path）
         if self.mcp_client.jadx_gui_path:
             self.on_status_update("📱 步骤 1/9: 在 JADX-GUI 中打开 APK...")
             open_result = self.mcp_client.open_apk(apk_path)
             self.current_analysis["open_result"] = open_result
+            self.on_status_update(f"   打开结果: {open_result.get('success', False)}")
         else:
             self.on_status_update("📱 步骤 1/9: 假设 APK 已在 JADX-GUI 中打开...")
 
         # 1.5. 连接到 MCP Server（在 JADX 打开 APK 后）
         self.on_status_update("🔌 步骤 1.5/9: 连接到 MCP Server...")
-        if not self.mcp_client.connect():
+        self.on_status_update(f"   当前连接状态: {self.mcp_client._is_connected}")
+
+        connect_result = self.mcp_client.connect()
+        self.on_status_update(f"   连接结果: {connect_result}")
+
+        if not connect_result:
             self.on_status_update("⚠️ MCP Server 连接失败，将尝试继续分析...")
         else:
             self.on_status_update("✅ MCP Server 已连接")
             # 等待一下让连接稳定
             import time
-            time.sleep(2)
+            time.sleep(1)
 
         # 2. 获取 Manifest 信息
         self.on_status_update("📄 步骤 2/9: 解析 AndroidManifest.xml...")

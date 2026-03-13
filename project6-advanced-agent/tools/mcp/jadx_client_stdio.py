@@ -249,8 +249,11 @@ class StdioMCPClient:
 
     def call_tool(self, tool_name: str, params: Dict[str, Any]) -> Any:
         """调用 MCP 工具（同步包装）"""
+        self.on_status_update(f"[call_tool] 调用工具: {tool_name}")
+
         if not self._loop:
             # 尝试自动重连
+            self.on_status_update("[call_tool] _loop 为 None，尝试重新连接...")
             if not self._is_connected:
                 self.on_status_update("⚠️ MCP 未连接，尝试重新连接...")
                 if not self.start():
@@ -258,6 +261,7 @@ class StdioMCPClient:
                     return None
 
         try:
+            self.on_status_update(f"[call_tool] 发送异步请求...")
             future = asyncio.run_coroutine_threadsafe(
                 self._call_tool_async(tool_name, params),
                 self._loop
