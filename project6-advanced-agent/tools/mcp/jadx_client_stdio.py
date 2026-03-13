@@ -1,9 +1,10 @@
 """
-JADX MCP 客户端模块 (使用官方 MCP SDK)
+JADX MCP 客户端模块 (使用统一事件循环)
 
-每次调用工具时重新建立连接，避免会话管理问题
+直接与 MCP Server 进行 JSON-RPC 通信
 """
 import asyncio
+import json
 import re
 import time
 import threading
@@ -13,17 +14,12 @@ from pathlib import Path
 from urllib.parse import urlparse
 import logging
 
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
-
 logger = logging.getLogger(__name__)
 
 
 class StdioMCPClient:
     """
-    MCP stdio 客户端 (使用官方 MCP SDK)
-
-    每次操作时重新建立连接，避免会话生命周期管理问题
+    MCP stdio 客户端 (直接实现，使用统一事件循环)
     """
 
     DANGEROUS_PERMISSIONS = {
@@ -55,6 +51,10 @@ class StdioMCPClient:
         self.jadx_gui_path = jadx_gui_path or self._find_jadx_gui()
         self.on_status_update = on_status_update or (lambda msg: None)
         self._current_apk: Optional[str] = None
+        self._request_id = 0
+        self._process: Optional[asyncio.subprocess.Process] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._loop_thread: Optional[threading.Thread] = None
 
     def _find_jadx_gui(self) -> str:
         """查找 jadx-gui 可执行文件"""
@@ -80,21 +80,89 @@ class StdioMCPClient:
 
         return "jadx-gui.exe" if is_windows else "jadx-gui"
 
-    def _run_in_event_loop(self, coro):
-        """在新的事件循环中运行异步代码"""
-        loop = asyncio.new_event_loop()
-        try:
-            return loop.run_until_complete(coro)
-        finally:
-            loop.close()
+    def _run_event_loop(self):
+        """在后台线程中运行事件循环"""
+        asyncio.set_event_loop(self._loop)
+        self._loop.run_forever()
+
+    async def _start_server(self):
+        """启动 MCP Server 进程"""
+        self._process = await asyncio.create_subprocess_exec(
+            *self.server_command,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        # 等待服务器启动
+        await asyncio.sleep(3)
+
+    async def _send_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """发送 JSON-RPC 请求并读取响应"""
+        if not self._process or not self._process.stdin:
+            raise RuntimeError("MCP Server 未运行")
+
+        message = json.dumps(request)
+        self._process.stdin.write(message.encode() + b'\n')
+        await self._process.stdin.drain()
+
+        # 读取响应
+        response_line = await asyncio.wait_for(
+            self._process.stdout.readline(),
+            timeout=30.0
+        )
+        response = json.loads(response_line.decode())
+
+        if "error" in response:
+            logger.error(f"请求错误: {response['error']}")
+            raise Exception(response["error"])
+
+        return response.get("result", response)
+
+    async def _initialize(self):
+        """初始化 MCP 会话"""
+        init_request = {
+            "jsonrpc": "2.0",
+            "id": self._next_id(),
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {
+                    "name": "apk-analysis-agent",
+                    "version": "1.0.0"
+                }
+            }
+        }
+        await self._send_request(init_request)
 
     def start(self) -> bool:
-        """启动 MCP 客户端（仅验证连接）"""
+        """启动 MCP 客户端"""
         self.on_status_update("启动 MCP Server...")
         try:
+            # 创建事件循环线程
+            self._loop = asyncio.new_event_loop()
+            self._loop_thread = threading.Thread(
+                target=self._run_event_loop,
+                daemon=True
+            )
+            self._loop_thread.start()
+            time.sleep(0.5)
+
+            # 在事件循环中启动服务器和初始化
+            def init():
+                async def _init():
+                    await self._start_server()
+                    await self._initialize()
+
+                asyncio.run_coroutine_threadsafe(_init(), self._loop)
+
+            init()
+            time.sleep(5)  # 等待初始化完成
+
+            # 验证连接
             tools = self.list_tools()
-            if tools is not None:
-                self.on_status_update("✅ MCP Server 已连接")
+            if tools and len(tools) > 0:
+                self.on_status_update(f"✅ MCP Server 已连接 ({len(tools)} 个工具)")
                 return True
             else:
                 self.on_status_update("❌ MCP Server 连接失败")
@@ -108,63 +176,82 @@ class StdioMCPClient:
         """连接到 MCP Server"""
         return self.start()
 
-    def call_tool(self, tool_name: str, params: Dict[str, Any]) -> Any:
-        """调用 MCP 工具"""
-        async def _call():
-            server_params = StdioServerParameters(
-                command=self.server_command[0],
-                args=self.server_command[1:] if len(self.server_command) > 1 else []
-            )
+    async def _call_tool_async(self, tool_name: str, params: Dict[str, Any]) -> Any:
+        """异步调用工具"""
+        request = {
+            "jsonrpc": "2.0",
+            "id": self._next_id(),
+            "method": "tools/call",
+            "params": {
+                "name": tool_name,
+                "arguments": params
+            }
+        }
+        return await self._send_request(request)
 
-            async with stdio_client(server_params) as (read_stream, write_stream):
-                session = ClientSession(read_stream, write_stream)
-                await session.initialize()
-                result = await session.call_tool(tool_name, params)
-                await session.close()
-                return result
+    def call_tool(self, tool_name: str, params: Dict[str, Any]) -> Any:
+        """调用 MCP 工具（同步包装）"""
+        if not self._loop:
+            return None
 
         try:
-            return self._run_in_event_loop(_call())
+            future = asyncio.run_coroutine_threadsafe(
+                self._call_tool_async(tool_name, params),
+                self._loop
+            )
+            return future.result(timeout=60)
         except Exception as e:
             logger.error(f"工具调用失败 {tool_name}: {e}")
             return None
 
+    async def _list_tools_async(self) -> List[Dict[str, Any]]:
+        """异步获取工具列表"""
+        request = {
+            "jsonrpc": "2.0",
+            "id": self._next_id(),
+            "method": "tools/list"
+        }
+        result = await self._send_request(request)
+
+        # 提取工具信息
+        tools = []
+        for tool in result.get("tools", []):
+            tools.append({
+                "name": tool.get("name"),
+                "description": tool.get("description"),
+                "inputSchema": tool.get("inputSchema", {})
+            })
+        return tools
+
     def list_tools(self) -> List[Dict[str, Any]]:
-        """获取可用的工具列表"""
-        async def _list():
-            server_params = StdioServerParameters(
-                command=self.server_command[0],
-                args=self.server_command[1:] if len(self.server_command) > 1 else []
-            )
-
-            async with stdio_client(server_params) as (read_stream, write_stream):
-                session = ClientSession(read_stream, write_stream)
-                await session.initialize()
-                tools_result = await session.list_tools()
-                await session.close()
-
-                result = []
-                for tool in tools_result.tools:
-                    result.append({
-                        "name": tool.name,
-                        "description": tool.description,
-                        "inputSchema": tool.inputSchema
-                    })
-                return result
+        """获取可用的工具列表（同步包装）"""
+        if not self._loop:
+            return []
 
         try:
-            self.on_status_update("[调试] 正在获取工具列表...")
-            result = self._run_in_event_loop(_list())
-            self.on_status_update(f"[调试] 获取到 {len(result)} 个工具")
-            return result
+            future = asyncio.run_coroutine_threadsafe(
+                self._list_tools_async(),
+                self._loop
+            )
+            return future.result(timeout=30)
         except Exception as e:
-            self.on_status_update(f"[错误] 获取工具列表失败: {e}")
-            logger.error(f"列出工具失败: {e}", exc_info=True)
+            logger.error(f"列出工具失败: {e}")
             return []
 
     def close(self):
-        """关闭 MCP 客户端"""
-        pass
+        """关闭 MCP Server"""
+        if self._loop and self._loop.is_running():
+            self._loop.call_soon_threadsafe(self._loop.stop)
+
+        if self._loop_thread and self._loop_thread.is_alive():
+            self._loop_thread.join(timeout=2)
+
+        self._loop = None
+
+    def _next_id(self) -> int:
+        """生成下一个请求 ID"""
+        self._request_id += 1
+        return self._request_id
 
     # ============ JMCPClient 兼容接口 ============
 
@@ -217,9 +304,6 @@ class StdioMCPClient:
         """获取 AndroidManifest.xml 内容"""
         result = self.call_tool("get_android_manifest", {})
 
-        if result and isinstance(result, list) and len(result) > 0:
-            result = result[0]
-
         if result and isinstance(result, dict):
             content = result.get("content", "")
             if content:
@@ -260,8 +344,8 @@ class StdioMCPClient:
 
             return {
                 "package": result.get("package", ""),
-                "version_name": result.get("version_name", result.get("versionName", "")),
-                "version_code": result.get("version_code", result.get("versionCode", "")),
+                "version_name": result.get("version_name", ""),
+                "version_code": result.get("version_code", ""),
                 "permissions": result.get("permissions", []),
                 "permissions_dangerous": result.get("permissions_dangerous", []),
                 "raw": result
@@ -281,8 +365,6 @@ class StdioMCPClient:
     def get_code_paths(self) -> List[str]:
         """获取代码文件路径"""
         result = self.call_tool("get_all_classes", {})
-        if result and isinstance(result, list) and len(result) > 0:
-            result = result[0]
         if result and isinstance(result, dict):
             return result.get("classes", [])
         return []
@@ -290,8 +372,6 @@ class StdioMCPClient:
     def get_strings(self, min_length: int = 4, offset: int = 0, count: int = 0) -> List[str]:
         """提取字符串"""
         result = self.call_tool("get_strings", {"offset": offset, "count": count})
-        if result and isinstance(result, list) and len(result) > 0:
-            result = result[0]
         if result and isinstance(result, dict):
             strings_data = result.get("strings", [])
             if isinstance(strings_data, list):
@@ -303,10 +383,7 @@ class StdioMCPClient:
     def get_apis(self, max_classes: int = 50) -> List[Dict[str, Any]]:
         """获取 API 调用"""
         apis = []
-
         classes_result = self.call_tool("get_all_classes", {"count": max_classes})
-        if classes_result and isinstance(classes_result, list) and len(classes_result) > 0:
-            classes_result = classes_result[0]
 
         if not classes_result or not isinstance(classes_result, dict):
             return apis
@@ -324,9 +401,6 @@ class StdioMCPClient:
         for class_name in classes[:max_classes]:
             try:
                 source_result = self.call_tool("get_class_source", {"class_name": class_name})
-                if source_result and isinstance(source_result, list) and len(source_result) > 0:
-                    source_result = source_result[0]
-
                 if source_result and isinstance(source_result, dict):
                     source_code = source_result.get("source", "")
                     if source_code:
@@ -382,26 +456,19 @@ class StdioMCPClient:
 
 def create_stdio_client(
     mcp_server_dir: str,
-    uv_path: str = "uv",
-    python_path: str = "python"
+    python_path: str = "python3"
 ) -> StdioMCPClient:
     """
     创建 stdio MCP 客户端
 
     Args:
         mcp_server_dir: jadx-mcp-server 目录
-        uv_path: uv 可执行文件路径
-        python_path: Python 可执行文件路径（Windows 备用）
+        python_path: Python 可执行文件路径
 
     Returns:
         StdioMCPClient 实例
     """
-    is_windows = platform.system() == "Windows"
-
-    if is_windows:
-        command = [python_path, str(Path(mcp_server_dir) / "jadx_mcp_server.py")]
-    else:
-        command = [python_path, str(Path(mcp_server_dir) / "jadx_mcp_server.py")]
+    command = [python_path, str(Path(mcp_server_dir) / "jadx_mcp_server.py")]
 
     client = StdioMCPClient(server_command=command)
     client.start()
