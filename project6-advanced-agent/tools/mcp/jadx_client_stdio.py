@@ -55,6 +55,8 @@ class StdioMCPClient:
         self._process: Optional[asyncio.subprocess.Process] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._loop_thread: Optional[threading.Thread] = None
+        self._is_connected = False
+        self._connection_lock = threading.Lock()
 
     def _find_jadx_gui(self) -> str:
         """查找 jadx-gui 可执行文件"""
@@ -137,44 +139,100 @@ class StdioMCPClient:
 
     def start(self) -> bool:
         """启动 MCP 客户端"""
-        self.on_status_update("启动 MCP Server...")
-        try:
-            # 创建事件循环线程
-            self._loop = asyncio.new_event_loop()
-            self._loop_thread = threading.Thread(
-                target=self._run_event_loop,
-                daemon=True
-            )
-            self._loop_thread.start()
-            time.sleep(0.5)
-
-            # 在事件循环中启动服务器和初始化
-            def init():
-                async def _init():
-                    await self._start_server()
-                    await self._initialize()
-
-                asyncio.run_coroutine_threadsafe(_init(), self._loop)
-
-            init()
-            time.sleep(5)  # 等待初始化完成
-
-            # 验证连接
-            tools = self.list_tools()
-            if tools and len(tools) > 0:
-                self.on_status_update(f"✅ MCP Server 已连接 ({len(tools)} 个工具)")
+        with self._connection_lock:
+            if self._is_connected:
                 return True
-            else:
-                self.on_status_update("❌ MCP Server 连接失败")
+
+            self.on_status_update("启动 MCP Server...")
+
+            # 先清理可能存在的旧进程
+            self._cleanup_old_processes()
+
+            try:
+                # 创建事件循环线程
+                self._loop = asyncio.new_event_loop()
+                self._loop_thread = threading.Thread(
+                    target=self._run_event_loop,
+                    daemon=True
+                )
+                self._loop_thread.start()
+                time.sleep(0.5)
+
+                # 在事件循环中启动服务器和初始化
+                def init():
+                    async def _init():
+                        await self._start_server()
+                        await self._initialize()
+
+                    asyncio.run_coroutine_threadsafe(_init(), self._loop)
+
+                init()
+                time.sleep(5)  # 等待初始化完成
+
+                # 验证连接
+                tools = self.list_tools()
+                if tools and len(tools) > 0:
+                    self.on_status_update(f"✅ MCP Server 已连接 ({len(tools)} 个工具)")
+                    self._is_connected = True
+                    return True
+                else:
+                    # 工具为空不代表失败，可能只是 JADX 插件还没加载项目
+                    self.on_status_update("⚠️ MCP Server 已启动，等待 JADX 加载项目...")
+                    self._is_connected = True
+                    return True
+            except Exception as e:
+                self.on_status_update(f"❌ 启动失败: {e}")
+                logger.error(f"启动失败: {e}", exc_info=True)
+                self._is_connected = False
                 return False
+
+    def _cleanup_old_processes(self):
+        """清理可能存在的旧 MCP Server 进程"""
+        try:
+            import subprocess
+            import platform
+
+            # 查找可能的旧进程（更精确的匹配）
+            if platform.system() == "Windows":
+                # Windows: 使用 wmic 查找 python.exe 运行 jadx_mcp_server.py 的进程
+                try:
+                    result = subprocess.run(
+                        ['wmic', 'process', 'where', "commandline like '%jadx_mcp_server.py%'"],
+                        capture_output=True,
+                        stderr=subprocess.DEVNULL,
+                        text=True
+                    )
+                    if result.returncode == 0:
+                        lines = result.stdout.strip().split('\n')
+                        for line in lines:
+                            if 'CommandLine' in line and 'jadx_mcp_server.py' in line:
+                                # 提取 PID
+                                parts = line.split('=')
+                                if len(parts) > 1:
+                                    pid = parts[1].strip()
+                                    try:
+                                        subprocess.run(['taskkill', '/F', '/PID', pid],
+                                                      capture_output=True, stderr=subprocess.DEVNULL)
+                                    except:
+                                        pass
+                except:
+                    pass
+            else:
+                # Unix/Linux: 使用 pkill 匹配
+                subprocess.run(
+                    ['pkill', '-f', 'jadx_mcp_server.py'],
+                    capture_output=True
+                )
         except Exception as e:
-            self.on_status_update(f"❌ 启动失败: {e}")
-            logger.error(f"启动失败: {e}", exc_info=True)
-            return False
+            logger.debug(f"清理旧进程时出错: {e}")
+            pass
 
     def connect(self) -> bool:
-        """连接到 MCP Server"""
-        return self.start()
+        """连接到 MCP Server（幂等操作）"""
+        with self._connection_lock:
+            if self._is_connected:
+                return True
+            return self.start()
 
     async def _call_tool_async(self, tool_name: str, params: Dict[str, Any]) -> Any:
         """异步调用工具"""
@@ -192,7 +250,12 @@ class StdioMCPClient:
     def call_tool(self, tool_name: str, params: Dict[str, Any]) -> Any:
         """调用 MCP 工具（同步包装）"""
         if not self._loop:
-            return None
+            # 尝试自动重连
+            if not self._is_connected:
+                self.on_status_update("⚠️ MCP 未连接，尝试重新连接...")
+                if not self.start():
+                    logger.error("无法连接到 MCP Server")
+                    return None
 
         try:
             future = asyncio.run_coroutine_threadsafe(
@@ -202,6 +265,9 @@ class StdioMCPClient:
             return future.result(timeout=60)
         except Exception as e:
             logger.error(f"工具调用失败 {tool_name}: {e}")
+            # 如果是连接相关错误，标记为未连接
+            if "Server 未运行" in str(e) or "Future" in str(e):
+                self._is_connected = False
             return None
 
     async def _list_tools_async(self) -> List[Dict[str, Any]]:
@@ -240,13 +306,33 @@ class StdioMCPClient:
 
     def close(self):
         """关闭 MCP Server"""
-        if self._loop and self._loop.is_running():
-            self._loop.call_soon_threadsafe(self._loop.stop)
+        with self._connection_lock:
+            self._is_connected = False
 
-        if self._loop_thread and self._loop_thread.is_alive():
-            self._loop_thread.join(timeout=2)
+            # 终止 MCP Server 进程
+            if self._process:
+                try:
+                    self._process.terminate()
+                    # 等待进程结束
+                    asyncio.run_coroutine_threadsafe(
+                        self._process.wait(),
+                        self._loop
+                    )
+                except:
+                    try:
+                        self._process.kill()
+                    except:
+                        pass
+                self._process = None
 
-        self._loop = None
+            # 停止事件循环
+            if self._loop and self._loop.is_running():
+                self._loop.call_soon_threadsafe(self._loop.stop)
+
+            if self._loop_thread and self._loop_thread.is_alive():
+                self._loop_thread.join(timeout=2)
+
+            self._loop = None
 
     def _next_id(self) -> int:
         """生成下一个请求 ID"""

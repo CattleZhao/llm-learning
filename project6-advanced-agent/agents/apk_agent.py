@@ -61,7 +61,8 @@ class APKAnalysisAgent(BaseAgent):
             jadx_gui_path=jadx_gui_path,
             on_status_update=self.on_status_update
         )
-        self.mcp_client.connect()
+        # 注意：不在这里连接，而是在打开 APK 后再连接
+        # 这样可以确保 JADX 插件已经启动
 
         # 获取知识库
         self.knowledge_base = get_knowledge_base()
@@ -125,6 +126,16 @@ class APKAnalysisAgent(BaseAgent):
             self.current_analysis["open_result"] = open_result
         else:
             self.on_status_update("📱 步骤 1/9: 假设 APK 已在 JADX-GUI 中打开...")
+
+        # 1.5. 连接到 MCP Server（在 JADX 打开 APK 后）
+        self.on_status_update("🔌 步骤 1.5/9: 连接到 MCP Server...")
+        if not self.mcp_client.connect():
+            self.on_status_update("⚠️ MCP Server 连接失败，将尝试继续分析...")
+        else:
+            self.on_status_update("✅ MCP Server 已连接")
+            # 等待一下让连接稳定
+            import time
+            time.sleep(2)
 
         # 2. 获取 Manifest 信息
         self.on_status_update("📄 步骤 2/9: 解析 AndroidManifest.xml...")

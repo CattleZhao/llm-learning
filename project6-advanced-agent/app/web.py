@@ -102,9 +102,11 @@ def main():
 
         st.info("""
         **使用流程（stdio 模式）：**
-        1. 在 JADX-GUI 中打开 APK 文件（Plugin 会自动启动）
-        2. 配置上方 MCP Server 目录路径
-        3. 点击下方"开始分析"按钮（Agent 会自动启动 MCP Server）
+        1. 配置上方 MCP Server 目录路径
+        2. 选择 APK 文件
+        3. 点击"开始分析"按钮
+        4. 如勾选"自动打开"，会先启动 JADX-GUI 打开 APK
+        5. Agent 自动连接 MCP Server 并开始分析
         """)
 
         use_auto_open = st.checkbox(
