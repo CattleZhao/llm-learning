@@ -111,35 +111,58 @@ class JMCPClient:
 
     def _find_jadx_gui(self) -> str:
         """查找 jadx-gui 可执行文件"""
-        candidates = ["jadx-gui", "jadx-gui.bat", "jadx"]
+        import platform
 
-        # 检查常见的安装路径
-        common_paths = [
-            "~/jadx/jadx-gui",
-            "/opt/jadx/bin/jadx-gui",
-            "/usr/local/bin/jadx-gui",
-        ]
+        system = platform.system()
+        is_windows = system == "Windows"
 
+        # Windows 特定候选
+        if is_windows:
+            candidates = ["jadx-gui.exe", "jadx-gui.bat", "jadx.exe"]
+            # Windows 常见安装路径
+            common_paths = [
+                "~/AppData/Local/JADX/bin/jadx-gui.exe",
+                "~/jadx/jadx-gui.exe",
+                "C:/Program Files/JADX/bin/jadx-gui.exe",
+                "C:/jadx/jadx-gui.exe",
+            ]
+        else:
+            candidates = ["jadx-gui", "jadx"]
+            # Unix 常见路径
+            common_paths = [
+                "~/jadx/jadx-gui",
+                "/opt/jadx/bin/jadx-gui",
+                "/usr/local/bin/jadx-gui",
+            ]
+
+        # 检查常见路径
         for path in common_paths:
             expanded = Path(path).expanduser()
             if expanded.exists():
                 return str(expanded)
 
+        # 使用 where/which 查找
         for name in candidates:
             try:
+                if is_windows:
+                    cmd = ["where", name]
+                else:
+                    cmd = ["which", name]
+
                 result = subprocess.run(
-                    ["which", name] if not name.endswith(".bat") else ["where", name],
+                    cmd,
                     capture_output=True,
                     text=True,
                     timeout=5
                 )
                 if result.returncode == 0:
-                    return result.stdout.strip()
+                    # Windows where 命令可能返回多行，取第一个
+                    return result.stdout.strip().split("\n")[0].strip()
             except (FileNotFoundError, subprocess.TimeoutExpired):
                 pass
 
-        # 默认返回 jadx，尝试用同一个二进制
-        return self.jadx_path
+        # 默认返回 jadx-gui 或 jadx
+        return "jadx-gui.exe" if is_windows else "jadx-gui"
 
     def connect(self) -> bool:
         """
@@ -237,20 +260,44 @@ class JMCPClient:
         self.on_status_update(f"🚀 在 JADX-GUI 中打开: {apk_file.name}")
 
         # 检查 jadx-gui 是否存在
-        if not self.jadx_gui_path or not Path(self.jadx_gui_path).exists():
-            self.on_status_update("⚠️ jadx-gui 不可用，使用命令行模式")
-            return self._open_apk_cli(apk_path)
+        if not self.jadx_gui_path:
+            # 尝试自动查找
+            self.jadx_gui_path = self._find_jadx_gui()
+            self.on_status_update(f"ℹ️ 自动查找 JADX-GUI: {self.jadx_gui_path}")
+
+        # 验证文件存在（如果不是命令名）
+        if "/" in self.jadx_gui_path or "\\" in self.jadx_gui_path:
+            if not Path(self.jadx_gui_path).exists():
+                self.on_status_update(f"⚠️ jadx-gui 不存在: {self.jadx_gui_path}")
+                return self._open_apk_cli(apk_path)
 
         # 启动 jadx-gui 并打开 APK
         try:
+            import platform
+            is_windows = platform.system() == "Windows"
+
+            # 构建命令: jadx-gui.exe test.apk (Windows)
+            cmd = [self.jadx_gui_path, str(apk_file)]
+
             # 使用单独的线程启动 GUI，避免阻塞
             def launch_gui():
                 try:
-                    subprocess.Popen(
-                        [self.jadx_gui_path, str(apk_path)],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL
-                    )
+                    if is_windows:
+                        # Windows: 使用 DETACHED_PROCESS 启动独立进程
+                        subprocess.Popen(
+                            cmd,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+                        )
+                    else:
+                        # Unix: 启动独立进程
+                        subprocess.Popen(
+                            cmd,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                            start_new_session=True
+                        )
                 except Exception as e:
                     logger.error(f"启动 JADX-GUI 失败: {e}")
 
@@ -266,6 +313,7 @@ class JMCPClient:
                 "success": True,
                 "apk_path": apk_path,
                 "method": "jadx-gui",
+                "command": " ".join(cmd),
                 "message": "APK 已在 JADX-GUI 中打开"
             }
 
