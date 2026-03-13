@@ -6,48 +6,35 @@ echo   APK 分析 Agent 启动脚本
 echo ========================================
 echo.
 
-REM 配置 - 请修改为你的实际路径
-set MCP_SERVER_PATH=C:\path\to\jadx-mcp-server
-set MCP_PORT=8650
-
-REM 检查 MCP Server 路径
-if not exist "%MCP_SERVER_PATH%" (
-    echo [错误] JADX MCP Server 路径不存在: %MCP_SERVER_PATH%
+REM 检查 .env 文件
+if not exist ".env" (
+    echo [INFO] 未找到 .env 文件，从 .env.example 复制...
+    copy .env.example .env
+    echo [INFO] 请编辑 .env 文件，配置以下变量:
+    echo        - JADX_MCP_SERVER_PATH
+    echo        - JADX_GUI_PATH (可选)
     echo.
-    echo 请编辑此脚本，修改 MCP_SERVER_PATH 为你的实际路径
-    pause
-    exit /b 1
 )
 
 REM 检查 uv 是否安装
 where uv >nul 2>nul
 if errorlevel 1 (
-    echo [错误] uv 未安装，请先安装: pip install uv
+    echo [ERROR] uv 未安装，请先安装: pip install uv
     pause
     exit /b 1
 )
 
-REM 启动 MCP Server（后台）
-echo [1/2] 启动 JADX MCP Server...
-cd /d "%MCP_SERVER_PATH%"
-start /B uv run jadx_mcp_server.py
-cd /d "%~dp0"
-
-REM 等待 MCP Server 启动
-timeout /t 3 /nobreak >nul
-
-echo [OK] JADX MCP Server 已启动
-echo      监听端口: %MCP_PORT%
-echo.
+REM 检查 streamlit 是否安装
+where streamlit >nul 2>nul
+if errorlevel 1 (
+    echo [ERROR] streamlit 未安装，请先安装: pip install streamlit
+    pause
+    exit /b 1
+)
 
 REM 启动 Web UI
-echo [2/2] 启动 Web UI...
+echo [INFO] 启动 Web UI...
+echo        在 Web UI 中配置 jadx-mcp-server 路径后即可使用
 echo.
 streamlit run app/web.py
-
-REM 清理
-echo.
-echo 停止 MCP Server...
-taskkill /F /IM python.exe /FI "WINDOWTITLE eq jadx_mcp_server*" 2>nul
-echo [OK] 已清理所有进程
 pause

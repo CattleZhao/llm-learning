@@ -36,7 +36,8 @@
 │     │                                                    │
 │     ▼                                                    │
 │  ┌─────────────────────────────────────────────────┐   │
-│  │ MCP Tool Calling (JADX MCP Server)               │   │
+│  │ MCP Tool Calling (JADX MCP Server - stdio)       │   │
+│  │  - 通过 stdin/stdout 进行 JSON-RPC 通信            │   │
 │  │  - 反编译 APK                                      │   │
 │  │  - 提取包路径列表                                  │   │
 │  │  - 提取权限信息                                    │   │
@@ -217,11 +218,7 @@ start.bat
 #### 方式二：手动启动
 
 ```bash
-# 终端 1: 启动 MCP Server
-cd /path/to/jadx-mcp-server
-uv run jadx_mcp_server.py
-
-# 终端 2: 启动 Web UI
+# 直接启动 Web UI（MCP Server 会自动通过 stdio 启动）
 cd project6-advanced-agent
 streamlit run app/web.py
 ```
@@ -256,8 +253,10 @@ streamlit run app/web.py
 ```python
 from agents.apk_agent import create_apk_agent
 
-# 创建 Agent
-agent = create_apk_agent()
+# 创建 Agent（需要指定 jadx-mcp-server 目录路径）
+agent = create_apk_agent(
+    mcp_server_path="/path/to/jadx-mcp-server"
+)
 
 # 分析 APK
 response = agent.think("分析 app.apk", context={"apk_path": "path/to/app.apk"})
@@ -274,7 +273,10 @@ def on_status(msg):
     print(f"[状态] {msg}")
 
 # 创建 Agent（带回调）
-agent = create_apk_agent(on_status_update=on_status)
+agent = create_apk_agent(
+    mcp_server_path="/path/to/jadx-mcp-server",
+    on_status_update=on_status
+)
 
 # 分析
 response = agent.think("分析 app.apk", context={"apk_path": "app.apk"})
@@ -377,7 +379,9 @@ print(response.content)
 ```
 APK 文件
     ↓
-JADX MCP 反编译
+JADX-GUI 打开 APK
+    ↓
+MCP stdio 通信 (uv run jadx_mcp_server.py)
     ↓
 提取包路径列表
     ↓
@@ -418,8 +422,9 @@ JADX MCP 反编译
 ## 技术栈
 
 - **LLM**: Anthropic Claude
-- **MCP**: Model Context Protocol
-- **JADX**: APK 反编译工具
+- **MCP**: Model Context Protocol (stdio 方式)
+- **JADX**: APK 反编译工具 (jadx-gui + jadx-mcp-server)
+- **uv**: Python 包运行器
 - **规则引擎**: Python 正则表达式
 - **知识存储**: JSON 文件
 

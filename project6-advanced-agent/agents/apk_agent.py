@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Callable
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from agents.base import BaseAgent, AgentResponse
-from tools.mcp.jadx_client import JMCPClient
+from tools.mcp.jadx_client_stdio import StdioMCPClient
 from knowledge_base.malware_patterns import MalwareKnowledgeBase, get_knowledge_base
 from knowledge_base import get_rule_loader
 from reflection.checker import AnalysisReflection, create_reflection_checker, ReflectionResult
@@ -31,7 +31,7 @@ class APKAnalysisAgent(BaseAgent):
 
     def __init__(
         self,
-        mcp_server_url: str = "http://localhost:8650",
+        mcp_server_path: str,
         jadx_gui_path: Optional[str] = None,
         enable_rag: bool = False,
         enable_advanced_analysis: bool = False,
@@ -48,9 +48,10 @@ class APKAnalysisAgent(BaseAgent):
         self.on_status_update = on_status_update or (lambda msg: None)
         self.enable_rag = enable_rag
 
-        # 初始化 MCP 客户端
-        self.mcp_client = JMCPClient(
-            server_url=mcp_server_url,
+        # 初始化 MCP 客户端 (stdio 方式)
+        command = ["uv", "--directory", mcp_server_path, "run", "jadx_mcp_server.py"]
+        self.mcp_client = StdioMCPClient(
+            server_command=command,
             jadx_gui_path=jadx_gui_path,
             on_status_update=self.on_status_update
         )
@@ -399,7 +400,7 @@ class APKAnalysisAgent(BaseAgent):
 
 # 便捷函数
 def create_apk_agent(
-    mcp_server_url: str = "http://localhost:3000",
+    mcp_server_path: str,
     jadx_gui_path: Optional[str] = None,
     enable_rag: bool = False,
     enable_advanced: bool = False,
@@ -409,7 +410,7 @@ def create_apk_agent(
     创建 APK 分析 Agent
 
     Args:
-        mcp_server_url: MCP Server 地址
+        mcp_server_path: jadx-mcp-server 目录路径
         jadx_gui_path: jadx-gui 可执行文件路径
         enable_rag: 是否启用 RAG 检索
         enable_advanced: 是否启用高级分析
@@ -419,7 +420,7 @@ def create_apk_agent(
         APKAnalysisAgent 实例
     """
     return APKAnalysisAgent(
-        mcp_server_url=mcp_server_url,
+        mcp_server_path=mcp_server_path,
         jadx_gui_path=jadx_gui_path,
         enable_rag=enable_rag,
         enable_advanced_analysis=enable_advanced,

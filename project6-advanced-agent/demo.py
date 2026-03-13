@@ -107,7 +107,19 @@ def demo_apk_analysis():
     print("演示 4: APK 恶意行为分析")
     print("=" * 60)
 
-    agent = create_apk_agent()
+    # 从环境变量获取 MCP Server 路径
+    import os
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    mcp_server_path = os.getenv("JADX_MCP_SERVER_PATH", "/path/to/jadx-mcp-server")
+
+    if mcp_server_path == "/path/to/jadx-mcp-server":
+        print("\n⚠️  请先配置 .env 文件中的 JADX_MCP_SERVER_PATH")
+        print("   例如: JADX_MCP_SERVER_PATH=/home/user/jadx-mcp-server")
+        return
+
+    agent = create_apk_agent(mcp_server_path=mcp_server_path)
 
     print(f"\n✅ Agent 已创建: {agent.name}")
 
