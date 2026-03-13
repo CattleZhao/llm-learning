@@ -149,9 +149,149 @@ com/.*\\.loader/.*          // 中间匹配
 | `url_rules.json` | URL 黑名单 | 4 条 |
 | `custom_rules.json` | 自定义模板 | 1 条 |
 
-## 使用方法
+## 快速开始
 
-### 1. 添加自定义规则
+### 环境要求
+
+- Python 3.9+
+- jadx 或 jadx-gui（用于 APK 反编译）
+
+### 1. 安装依赖
+
+```bash
+cd project6-advanced-agent
+pip install -r requirements.txt
+```
+
+### 2. 安装 JADX
+
+#### 方式一：下载预编译版本（推荐）
+
+```bash
+# Linux/Mac
+wget https://github.com/skylot/jadx/releases/download/v1.5.0/jadx-1.5.0.zip
+unzip jadx-1.5.0.zip -d ~/jadx
+
+# Windows
+# 下载: https://github.com/skylot/jadx/releases/download/v1.5.0/jadx-1.5.0.zip
+# 解压到 C:\jadx
+```
+
+#### 方式二：添加到 PATH
+
+```bash
+# Linux/Mac
+export PATH=$PATH:~/jadx/jadx-1.5.0
+
+# Windows - 添加到系统 PATH
+# C:\jadx\jadx-1.5.0
+```
+
+### 3. 配置环境变量（可选）
+
+```bash
+cp .env.example .env
+
+# 编辑 .env 文件，配置 JADX 路径
+# JADX_GUI_PATH=~/jadx/jadx-1.5.0/bin/jadx-gui    # Linux/Mac
+# JADX_GUI_PATH=C:\jadx\jadx-gui.exe              # Windows
+```
+
+### 4. 运行演示
+
+```bash
+# 查看规则加载演示
+python demo.py
+```
+
+## 使用方式
+
+### 方式一：Web UI（推荐）
+
+```bash
+# 启动 Web 界面
+streamlit run app/web.py
+```
+
+浏览器打开 `http://localhost:8501`，然后：
+
+1. **选择 APK 文件** - 上传或输入路径
+2. **配置选项**（可选）:
+   - 启用 RAG 检索
+   - 启用高级分析
+   - 配置 JADX 路径
+3. **点击分析** - 查看实时进度和报告
+
+### 方式二：命令行
+
+```python
+from agents.apk_agent import create_apk_agent
+
+# 创建 Agent
+agent = create_apk_agent()
+
+# 分析 APK
+response = agent.think("分析 app.apk", context={"apk_path": "path/to/app.apk"})
+print(response.content)
+```
+
+### 方式三：带状态回调
+
+```python
+from agents.apk_agent import create_apk_agent
+
+# 状态回调
+def on_status(msg):
+    print(f"[状态] {msg}")
+
+# 创建 Agent（带回调）
+agent = create_apk_agent(on_status_update=on_status)
+
+# 分析
+response = agent.think("分析 app.apk", context={"apk_path": "app.apk"})
+```
+
+## 完整分析流程
+
+```
+1. 📱 在 JADX-GUI 中打开 APK
+2. 📄 解析 AndroidManifest.xml
+3. 🔐 分析权限
+4. 📂 扫描代码路径
+5. 🌐 分析网络通信
+6. ⚙️ 分析 API 调用
+7. 📝 提取字符串
+8. 🎯 匹配恶意模式
+9. 📊 计算风险等级
+```
+
+## Windows 配置
+
+### JADX 安装
+
+1. 下载 [jadx-1.5.0.zip](https://github.com/skylot/jadx/releases/download/v1.5.0/jadx-1.5.0.zip)
+2. 解压到 `C:\jadx\`
+3. 确认 `C:\jadx\jadx-gui.exe` 存在
+
+### 配置文件 (.env)
+
+```bash
+JADX_GUI_PATH=C:\jadx\jadx-gui.exe
+# 或者在 PATH 中时
+JADX_GUI_PATH=jadx-gui
+```
+
+### 运行
+
+```bash
+# CMD
+streamlit run app/web.py
+
+# PowerShell
+streamlit run app/web.py
+```
+
+## 使用方法
 
 将你的恶意特征规则整理成 JSON 格式，放到 `knowledge_base/raw/rules/` 目录：
 
