@@ -53,7 +53,7 @@ class APKAnalysisAgent(BaseAgent):
         if platform.system() == "Windows":
             command = ["python", str(Path(mcp_server_path) / "jadx_mcp_server.py")]
         else:
-            command = ["uv", "--directory", mcp_server_path, "run", "jadx_mcp_server.py"]
+            command = ["python3", str(Path(mcp_server_path) / "jadx_mcp_server.py")]
 
         # 初始化 MCP 客户端 (stdio 方式)
         self.mcp_client = StdioMCPClient(
