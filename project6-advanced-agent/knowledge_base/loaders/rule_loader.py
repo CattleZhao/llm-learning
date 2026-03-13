@@ -106,7 +106,8 @@ class RuleLoader:
         for rule_file in rule_files:
             self._load_from_file(rule_file)
 
-        print(f"[Info] 已加载 {len(self.rules)} 条规则，来自 {len(rule_files)} 个文件")
+        # 只在加载完成后打印一次汇总
+        print(f"[Info] 规则加载完成: {len(self.rules)} 条规则，来自 {len(rule_files)} 个文件")
 
     def _load_from_file(self, rule_file: Path):
         """从单个文件加载规则"""
@@ -121,7 +122,7 @@ class RuleLoader:
                 # 如果是单个规则的格式
                 self.rules.append(MalwareRule(**data))
 
-            print(f"[Info] 从 {rule_file.name} 加载了 {len(data.get('rules', [data]))} 条规则")
+            # 不再逐文件打印，只打印汇总
 
         except Exception as e:
             print(f"[Error] 加载规则文件 {rule_file} 失败: {e}")
@@ -248,6 +249,11 @@ class RuleLoader:
 _rule_loader = None
 
 
+# 全局单例和初始化标志
+_rule_loader = None
+_rule_loader_initialized = False
+
+
 # 便捷函数
 def get_rule_loader(rules_dir: str = "knowledge_base/raw/rules") -> RuleLoader:
     """
@@ -259,7 +265,10 @@ def get_rule_loader(rules_dir: str = "knowledge_base/raw/rules") -> RuleLoader:
     Returns:
         RuleLoader 实例
     """
-    global _rule_loader
+    global _rule_loader, _rule_loader_initialized
     if _rule_loader is None:
+        if not _rule_loader_initialized:
+            print("[Info] 首次初始化规则加载器...")
+            _rule_loader_initialized = True
         _rule_loader = RuleLoader(rules_dir)
     return _rule_loader
