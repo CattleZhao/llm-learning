@@ -118,10 +118,13 @@ class APKAnalysisAgent(BaseAgent):
 
     def _analyze_apk(self, apk_path: str):
         """执行完整的 APK 分析（9步）"""
-        # 1. 在 JADX-GUI 中打开 APK
-        self.on_status_update("📱 步骤 1/9: 在 JADX-GUI 中打开 APK...")
-        open_result = self.mcp_client.open_apk(apk_path)
-        self.current_analysis["open_result"] = open_result
+        # 1. 在 JADX-GUI 中打开 APK（如果配置了 jadx_gui_path）
+        if self.mcp_client.jadx_gui_path:
+            self.on_status_update("📱 步骤 1/9: 在 JADX-GUI 中打开 APK...")
+            open_result = self.mcp_client.open_apk(apk_path)
+            self.current_analysis["open_result"] = open_result
+        else:
+            self.on_status_update("📱 步骤 1/9: 假设 APK 已在 JADX-GUI 中打开...")
 
         # 2. 获取 Manifest 信息
         self.on_status_update("📄 步骤 2/9: 解析 AndroidManifest.xml...")

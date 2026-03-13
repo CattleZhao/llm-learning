@@ -74,16 +74,17 @@
 │                                                          │
 └─────────────────────────────────────────────────────────┘
 
-外部依赖（需要单独启动）:
-┌────────────────┐     HTTP      ┌──────────────────┐
-│  MCP Server    │ ←-----------→ │ JADX AI Plugin   │
-│ (uv run...)    │               │ (在JADX-GUI中)   │
-└────────────────┘               └────────┬─────────┘
-                                          │
-                                          ▼
-                                ┌─────────────────┐
-                                │    JADX GUI     │
-                                └─────────────────┘
+外部依赖（自动启动）:
+┌──────────────┐     打开 APK     ┌─────────────────┐
+│  用户操作    │ ───────────────→ │    JADX GUI     │
+└──────────────┘                  │ (Plugin自动启动) │
+                                  └────────┬─────────┘
+                                           │ HTTP
+                                           ▼
+┌──────────────┐     stdio      ┌──────────────────┐
+│ 我们的 Agent │ ←─────────────→ │  MCP Server      │
+│              │                  │ (uv run...)      │
+└──────────────┘                  └──────────────────┘
 ```
 
 ## 项目结构
@@ -299,39 +300,40 @@ response = agent.think("分析 app.apk", context={"apk_path": "app.apk"})
 
 ## 使用前准备
 
-**重要：首次使用前需要配置 JADX-GUI 的 MCP Plugin**
+**重要：JADX-GUI 打开 APK 时会自动启动 MCP Plugin**
 
-### 步骤 1：启动 JADX-GUI
+### 步骤 1：在 JADX-GUI 中打开 APK
 
-```bash
-# Linux/Mac
-~/jadx/bin/jadx-gui
+1. 启动 JADX-GUI：
+   ```bash
+   # Linux/Mac
+   ~/jadx/bin/jadx-gui
 
-# Windows
-jadx-gui.exe
-```
+   # Windows
+   jadx-gui.exe
+   ```
 
-### 步骤 2：配置 MCP Plugin
+2. 在 JADX-GUI 中打开你要分析的 APK 文件
+   - MCP Plugin 会自动启动
+   - 无需额外配置
 
-在 JADX-GUI 中：
-1. 打开 Settings/Preferences
-2. 找到 MCP Plugin 或 AI Plugin 配置
-3. 启用 Plugin 并设置监听端口（默认通常是 8080 或其他）
-4. 点击 Start/Apply 启动 Plugin
+### 步骤 2：启动我们的 Agent
 
-### 步骤 3：确认 Plugin 运行
-
-在 JADX-GUI 的日志中应该看到类似：
-```
-MCP Server started on port 8080
-```
-
-### 步骤 4：使用我们的 Agent
-
-现在可以启动 Web UI 或使用代码调用：
 ```bash
 streamlit run app/web.py
 ```
+
+### 步骤 3：开始分析
+
+1. 在 Web UI 中配置 jadx-mcp-server 目录路径
+2. 点击"开始分析"
+3. Agent 会通过 MCP Server 获取已打开 APK 的信息
+
+### 可选：自动打开 APK
+
+如果希望 Agent 自动在 JADX-GUI 中打开 APK，可以：
+1. 勾选"自动在 JADX-GUI 中打开 APK"
+2. 配置 jadx-gui 可执行文件路径
 
 ## 完整分析流程
 

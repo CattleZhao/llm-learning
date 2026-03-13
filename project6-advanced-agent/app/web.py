@@ -94,10 +94,9 @@ def main():
         st.header("🔧 JADX 配置")
 
         st.info("""
-        **使用前准备：**
-        1. 启动 JADX-GUI
-        2. 在 JADX-GUI 中配置并启动 MCP Plugin
-        3. 确保插件监听在正确的端口
+        **使用流程：**
+        1. 先在 JADX-GUI 中打开 APK 文件（Plugin 会自动启动）
+        2. 然后点击下方"开始分析"按钮
         """)
 
         mcp_server_path = st.text_input(
@@ -107,12 +106,21 @@ def main():
             help="jadx-mcp-server 的目录路径（包含 jadx_mcp_server.py）"
         )
 
-        jadx_gui_path = st.text_input(
-            "JADX-GUI 路径（可选）",
-            value="",
-            placeholder="jadx-gui 或 /path/to/jadx-gui",
-            help="用于自动打开 APK，留空则跳过"
+        use_auto_open = st.checkbox(
+            "自动在 JADX-GUI 中打开 APK",
+            value=False,
+            help="如果勾选，会自动启动 JADX-GUI 并打开 APK（需要配置路径）"
         )
+
+        if use_auto_open:
+            jadx_gui_path = st.text_input(
+                "JADX-GUI 路径",
+                value="",
+                placeholder="jadx-gui 或 /path/to/jadx-gui",
+                help="用于自动打开 APK"
+            )
+        else:
+            jadx_gui_path = None
 
         st.markdown("---")
         st.header("📋 检测规则")
