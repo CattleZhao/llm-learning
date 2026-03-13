@@ -139,13 +139,19 @@ class StdioMCPClient:
 
     def start(self) -> bool:
         """启动 MCP 客户端"""
-        # 快速检查：如果已经连接，直接返回
-        if self._is_connected and self._loop is not None:
+        # 快速检查：如果已经连接且事件循环正在运行，直接返回
+        if self._is_connected and self._loop is not None and self._loop.is_running():
             return True
 
-        # 防止重复启动
+        # 如果有旧的事件循环但未连接，先清理
+        if self._loop is not None and not self._is_connected:
+            self.on_status_update("🔄 清理旧连接，重新启动...")
+            self._loop = None
+            self._loop_thread = None
+
+        # 如果已经在启动中（loop 存在且正在运行），等待一下再检查状态
         if self._loop is not None:
-            self.on_status_update("⚠️ MCP 已经在启动中或已启动")
+            time.sleep(1)
             return self._is_connected
 
         self.on_status_update("启动 MCP Server...")
@@ -172,7 +178,7 @@ class StdioMCPClient:
                 asyncio.run_coroutine_threadsafe(_init(), self._loop)
 
             init()
-            time.sleep(5)  # 等待初始化完成
+            time.sleep(3)  # 减少等待时间
 
             # 验证连接
             tools = self.list_tools()
@@ -255,7 +261,7 @@ class StdioMCPClient:
     def call_tool(self, tool_name: str, params: Dict[str, Any]) -> Any:
         """调用 MCP 工具（同步包装）"""
         # 检查连接状态，如果未连接则尝试连接
-        if not self._is_connected or self._loop is None:
+        if not self._is_connected or self._loop is None or (self._loop and not self._loop.is_running()):
             self.on_status_update("⚠️ MCP 未连接，尝试重新连接...")
             if not self.start():
                 logger.error("无法连接到 MCP Server")
