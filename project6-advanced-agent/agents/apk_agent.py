@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Callable
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from agents.base import BaseAgent, AgentResponse
-from tools.mcp.jadx_client_http import HTTPMCPClient
+from tools.mcp.jadx_client_stdio import StdioMCPClient
 from knowledge_base.malware_patterns import MalwareKnowledgeBase, get_knowledge_base
 from knowledge_base import get_rule_loader
 from reflection.checker import AnalysisReflection, create_reflection_checker, ReflectionResult
@@ -31,8 +31,7 @@ class APKAnalysisAgent(BaseAgent):
 
     def __init__(
         self,
-        mcp_server_url: str = "http://127.0.0.1:8651",
-        mcp_server_path: Optional[str] = None,
+        mcp_server_path: str,
         jadx_gui_path: Optional[str] = None,
         enable_rag: bool = False,
         enable_advanced_analysis: bool = False,
@@ -49,13 +48,17 @@ class APKAnalysisAgent(BaseAgent):
         self.on_status_update = on_status_update or (lambda msg: None)
         self.enable_rag = enable_rag
 
-        # 初始化 MCP 客户端 (HTTP 方式)
-        # 如果提供 mcp_server_path，会自动启动 MCP Server
-        self.mcp_client = HTTPMCPClient(
-            server_url=mcp_server_url,
-            mcp_server_path=mcp_server_path,
+        # 构建 stdio 启动命令
+        import platform
+        if platform.system() == "Windows":
+            command = ["python", str(Path(mcp_server_path) / "jadx_mcp_server.py")]
+        else:
+            command = ["uv", "--directory", mcp_server_path, "run", "jadx_mcp_server.py"]
+
+        # 初始化 MCP 客户端 (stdio 方式)
+        self.mcp_client = StdioMCPClient(
+            server_command=command,
             jadx_gui_path=jadx_gui_path,
-            auto_start_server=bool(mcp_server_path),
             on_status_update=self.on_status_update
         )
         self.mcp_client.connect()
@@ -406,25 +409,20 @@ class APKAnalysisAgent(BaseAgent):
 
 # 便捷函数
 def create_apk_agent(
-    mcp_server_url: str = "http://127.0.0.1:8651",
-    mcp_server_path: Optional[str] = None,
+    mcp_server_path: str,
     jadx_gui_path: Optional[str] = None,
     enable_rag: bool = False,
     enable_advanced: bool = False,
     on_status_update: Optional[Callable[[str], None]] = None
 ) -> APKAnalysisAgent:
     """
-    创建 APK 分析 Agent (HTTP 模式)
+    创建 APK 分析 Agent (stdio 模式)
 
-    如果提供 mcp_server_path，Agent 会自动启动 MCP Server。
-    否则需要手动启动 MCP Server:
-    cd /path/to/jadx-mcp-server
-    uv run jadx_mcp_server.py --http --port 8651
+    Agent 会自动启动 MCP Server 并通过 stdio 通信。
 
     Args:
-        mcp_server_url: MCP Server HTTP 地址 (默认: http://127.0.0.1:8651)
-        mcp_server_path: jadx-mcp-server 目录路径（可选，用于自动启动）
-        jadx_gui_path: jadx-gui 可执行文件路径
+        mcp_server_path: jadx-mcp-server 目录路径
+        jadx_gui_path: jadx-gui 可执行文件路径（可选）
         enable_rag: 是否启用 RAG 检索
         enable_advanced: 是否启用高级分析
         on_status_update: 状态更新回调
@@ -433,7 +431,6 @@ def create_apk_agent(
         APKAnalysisAgent 实例
     """
     return APKAnalysisAgent(
-        mcp_server_url=mcp_server_url,
         mcp_server_path=mcp_server_path,
         jadx_gui_path=jadx_gui_path,
         enable_rag=enable_rag,

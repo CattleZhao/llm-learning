@@ -93,36 +93,19 @@ def main():
         st.markdown("---")
         st.header("🔧 MCP 配置")
 
-        # MCP Server 路径配置（可选，用于自动启动）
-        auto_start_mcp = st.checkbox(
-            "自动启动 MCP Server",
-            value=True,
-            help="如果勾选，Agent 会自动启动 MCP Server（需要配置路径）"
+        mcp_server_path = st.text_input(
+            "JADX MCP Server 目录",
+            value="/root/Learn/jadx-mcp-server",
+            placeholder="/path/to/jadx-mcp-server",
+            help="jadx-mcp-server 的目录路径（包含 jadx_mcp_server.py）"
         )
 
-        if auto_start_mcp:
-            mcp_server_path = st.text_input(
-                "JADX MCP Server 目录",
-                value="/root/Learn/jadx-mcp-server",
-                placeholder="/path/to/jadx-mcp-server",
-                help="jadx-mcp-server 的目录路径（包含 jadx_mcp_server.py）"
-            )
-        else:
-            mcp_server_path = None
-            st.info("""
-            **手动启动 MCP Server:**
-            ```bash
-            cd /path/to/jadx-mcp-server
-            uv run jadx_mcp_server.py --http --port 8651
-            ```
-            """)
-
-        mcp_server_url = st.text_input(
-            "MCP Server URL",
-            value="http://127.0.0.1:8651",
-            placeholder="http://127.0.0.1:8651",
-            help="MCP Server 的 HTTP 地址"
-        )
+        st.info("""
+        **使用流程（stdio 模式）：**
+        1. 在 JADX-GUI 中打开 APK 文件（Plugin 会自动启动）
+        2. 配置上方 MCP Server 目录路径
+        3. 点击下方"开始分析"按钮（Agent 会自动启动 MCP Server）
+        """)
 
         use_auto_open = st.checkbox(
             "自动在 JADX-GUI 中打开 APK",
@@ -227,8 +210,7 @@ def main():
                 with st.spinner("正在分析 APK..."):
                     # 创建 Agent
                     agent = create_apk_agent(
-                        mcp_server_url=mcp_server_url,
-                        mcp_server_path=mcp_server_path if auto_start_mcp else None,
+                        mcp_server_path=mcp_server_path,
                         jadx_gui_path=jadx_gui_path if jadx_gui_path else None,
                         enable_rag=enable_rag,
                         enable_advanced=enable_advanced,
