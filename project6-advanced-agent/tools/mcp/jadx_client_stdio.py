@@ -93,10 +93,10 @@ class StdioMCPClient:
             *self.server_command,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.DEVNULL  # 忽略 stderr，避免缓冲区阻塞
         )
         # 等待服务器启动
-        await asyncio.sleep(3)
+        await asyncio.sleep(2)  # 减少等待时间
 
     async def _send_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """发送 JSON-RPC 请求并读取响应"""
