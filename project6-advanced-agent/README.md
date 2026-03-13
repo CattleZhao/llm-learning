@@ -191,11 +191,14 @@ unzip jadx-1.5.0.zip -d ~/jadx
 ### 3. 安装 JADX MCP Server
 
 ```bash
-# 克隆 jadx-mcp-server
-git clone https://github.com/skylot/jadx-mcp-server.git ~/jadx-mcp-server
+# 克隆 jadx-ai-mcp 仓库
+git clone https://github.com/zinja-coder/jadx-ai-mcp.git ~/jadx-mcp-server
 
-# 或者下载后解压到指定目录
+# 或者下载 ZIP 后解压
+# https://github.com/zinja-coder/jadx-ai-mcp
 ```
+
+这个文件夹包含 `jadx_mcp_server.py`，我们的 Agent 会通过 stdio 方式调用它。
 
 ### 4. 安装 uv
 
