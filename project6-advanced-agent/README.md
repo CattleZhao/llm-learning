@@ -87,6 +87,29 @@
 └──────────────┘                  └──────────────────┘
 ```
 
+## MCP 工具列表
+
+根据 jadx-mcp-server 的官方实现，以下 MCP 工具可用:
+
+| 工具名称 | 参数 | 说明 |
+|---------|------|------|
+| `get_android_manifest()` | 无 | 获取 AndroidManifest.xml 内容 |
+| `get_all_classes(offset, count)` | offset=0, count=0 | 获取所有类列表（分页） |
+| `get_class_source(class_name)` | class_name | 获取指定类的源代码 |
+| `get_strings(offset, count)` | offset=0, count=0 | 获取 strings.xml 内容 |
+| `get_all_resource_file_names(offset, count)` | offset=0, count=0 | 获取所有资源文件名 |
+| `get_resource_file(resource_name)` | resource_name | 获取资源文件内容 |
+| `search_classes_by_keyword(search_term, package, search_in, offset, count)` | 多参数 | 按关键字搜索类 |
+| `get_methods_of_class(class_name)` | class_name | 获取类的方法列表 |
+| `get_fields_of_class(class_name)` | class_name | 获取类的字段列表 |
+| `get_smali_of_class(class_name)` | class_name | 获取类的 Smali 代码 |
+| `get_xrefs_to_class(class_name, offset, count)` | 多参数 | 查找类的引用 |
+| `get_xrefs_to_method(class_name, method_name, offset, count)` | 多参数 | 查找方法的引用 |
+| `get_main_activity_class()` | 无 | 获取主 Activity 类 |
+| `get_main_application_classes_names()` | 无 | 获取应用类名称列表 |
+
+**注意:** MCP Server 默认通过 HTTP 端口 8650 与 JADX Plugin 通信。
+
 ## 项目结构
 
 ```

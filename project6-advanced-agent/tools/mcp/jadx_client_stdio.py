@@ -341,10 +341,70 @@ class StdioMCPClient:
             return {"success": False, "error": str(e)}
 
     def get_manifest(self) -> Dict[str, Any]:
-        """获取 AndroidManifest.xml 内容"""
-        result = self.call_tool("jadx_get_manifest", {})
+        """获取 AndroidManifest.xml 内容
+
+        Returns:
+            标准化格式的 manifest 信息
+        """
+        result = self.call_tool("get_android_manifest", {})
         if result and isinstance(result, dict):
-            return result
+            # 处理可能的响应格式
+            # JADX MCP Server 返回的格式可能是:
+            # 1. {"content": "<xml>...", "package": "...", ...}
+            # 2. {"package": "...", "permissions": [...], ...}
+
+            # 如果有 content 字段，解析 XML
+            content = result.get("content", "")
+            if content:
+                import xml.etree.ElementTree as ET
+                try:
+                    ET.register_namespace("android", "http://schemas.android.com/apk/res/android")
+                    root = ET.fromstring(content)
+
+                    # 提取包名和版本
+                    manifest_attrs = root.attrib
+                    package_name = manifest_attrs.get("package", "")
+
+                    # 提取权限
+                    permissions = []
+                    dangerous_permissions = []
+                    for perm in root.findall(".//uses-permission"):
+                        perm_name = perm.attrib.get(
+                            "{http://schemas.android.com/apk/res/android}name",
+                            perm.attrib.get("name", "")
+                        )
+                        if perm_name:
+                            permissions.append(perm_name)
+                            if perm_name in self.DANGEROUS_PERMISSIONS:
+                                dangerous_permissions.append(perm_name)
+
+                    return {
+                        "package": package_name,
+                        "version_name": manifest_attrs.get(
+                            "{http://schemas.android.com/apk/res/android}versionName", ""
+                        ),
+                        "version_code": manifest_attrs.get(
+                            "{http://schemas.android.com/apk/res/android}versionCode", ""
+                        ),
+                        "permissions": permissions,
+                        "permissions_dangerous": dangerous_permissions,
+                        "raw_xml": content,
+                        "raw": result
+                    }
+                except ET.ParseError:
+                    pass
+
+            # 如果解析失败或没有 content，使用原始返回值
+            return {
+                "package": result.get("package", ""),
+                "version_name": result.get("version_name", result.get("versionName", "")),
+                "version_code": result.get("version_code", result.get("versionCode", "")),
+                "permissions": result.get("permissions", []),
+                "permissions_dangerous": result.get("permissions_dangerous", []),
+                "min_sdk": result.get("min_sdk", result.get("minSdkVersion", "")),
+                "target_sdk": result.get("target_sdk", result.get("targetSdkVersion", "")),
+                "raw": result
+            }
         return {}
 
     def get_permissions(self) -> Dict[str, Any]:
@@ -359,27 +419,92 @@ class StdioMCPClient:
 
     def get_code_paths(self) -> List[str]:
         """获取代码文件路径"""
-        result = self.call_tool("jadx_get_code_paths", {})
+        result = self.call_tool("get_all_classes", {})
         if result and isinstance(result, dict):
-            return result.get("paths", [])
+            return result.get("classes", [])
         return []
 
-    def get_strings(self, min_length: int = 4) -> List[str]:
-        """提取字符串"""
-        result = self.call_tool("jadx_get_strings", {"min_length": min_length})
+    def get_strings(self, min_length: int = 4, offset: int = 0, count: int = 0) -> List[str]:
+        """提取字符串
+
+        Args:
+            min_length: 最小字符串长度（保留用于向后兼容）
+            offset: 分页偏移量
+            count: 返回数量（0表示全部）
+
+        Returns:
+            字符串列表
+        """
+        # count=0 表示获取全部
+        result = self.call_tool("get_strings", {"offset": offset, "count": count})
         if result and isinstance(result, dict):
-            return result.get("strings", [])
+            strings_data = result.get("strings", [])
+            if isinstance(strings_data, list):
+                return strings_data
+            elif isinstance(strings_data, dict):
+                # 可能是 {"strings": [...]} 格式
+                return strings_data.get("strings", [])
         return []
 
-    def get_apis(self) -> List[Dict[str, Any]]:
-        """获取 API 调用"""
-        result = self.call_tool("jadx_get_apis", {})
-        if result and isinstance(result, dict):
-            return result.get("apis", [])
-        return []
+    def get_apis(self, max_classes: int = 50) -> List[Dict[str, Any]]:
+        """获取 API 调用
+
+        注意: MCP Server 没有直接的 get_apis 工具，
+        我们通过获取类源码并分析来提取 API 调用
+
+        Args:
+            max_classes: 最多分析的类数量
+
+        Returns:
+            API 调用列表，每个元素包含 {"class": str, "method": str, "api": str}
+        """
+        apis = []
+
+        # 获取所有类
+        classes_result = self.call_tool("get_all_classes", {"count": max_classes})
+        if not classes_result or not isinstance(classes_result, dict):
+            return apis
+
+        classes = classes_result.get("classes", [])
+        if not classes:
+            return apis
+
+        # 分析每个类提取 API 调用
+        import re
+        api_patterns = [
+            r'(getDeviceId|getSubscriberId|getLine1Number|sendTextMessage|requestLocationUpdates)',
+            r'(TelephonyManager|SmsManager|LocationManager|ConnectivityManager)',
+            r'\.(findViewById|getSystemService|startActivity|startService)',
+        ]
+
+        for class_name in classes[:max_classes]:
+            try:
+                # 获取类源码
+                source_result = self.call_tool("get_class_source", {"class_name": class_name})
+                if source_result and isinstance(source_result, dict):
+                    source_code = source_result.get("source", "")
+                    if source_code:
+                        # 分析源码提取 API 调用
+                        for pattern in api_patterns:
+                            matches = re.finditer(pattern, source_code)
+                            for match in matches:
+                                apis.append({
+                                    "class": class_name,
+                                    "method": match.group(0),
+                                    "api": match.group(0)
+                                })
+            except Exception as e:
+                logger.debug(f"分析类 {class_name} 失败: {e}")
+                continue
+
+        return apis
 
     def get_network_info(self) -> Dict[str, Any]:
-        """分析网络通信信息"""
+        """分析网络通信信息
+
+        Returns:
+            网络通信分析结果，包含 URL、IP、域名等
+        """
         info = {
             "urls": [],
             "ips": [],
@@ -392,9 +517,11 @@ class StdioMCPClient:
         url_pattern = re.compile(r'(https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s]*)?)')
         ip_pattern = re.compile(r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b')
 
+        # 获取字符串资源
         strings = self.get_strings()
 
         for s in strings:
+            # 查找 URL
             for match in url_pattern.findall(s):
                 if match not in info["urls"]:
                     info["urls"].append(match)
@@ -408,6 +535,7 @@ class StdioMCPClient:
                     if parsed.netloc and parsed.netloc not in info["domains"]:
                         info["domains"].append(parsed.netloc)
 
+            # 查找 IP 地址
             for match in ip_pattern.findall(s):
                 if match not in info["ips"]:
                     info["ips"].append(match)
