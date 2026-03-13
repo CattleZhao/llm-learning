@@ -36,12 +36,10 @@
 │     │                                                    │
 │     ▼                                                    │
 │  ┌─────────────────────────────────────────────────┐   │
-│  │ MCP Tool Calling (JADX MCP Server - stdio)       │   │
-│  │  - 通过 stdin/stdout 进行 JSON-RPC 通信            │   │
-│  │  - 反编译 APK                                      │   │
-│  │  - 提取包路径列表                                  │   │
-│  │  - 提取权限信息                                    │   │
-│  │  - 提取 API 调用                                   │   │
+│  │ MCP Tool Calling (stdio → HTTP)                  │   │
+│  │  ① Agent → MCP Server (stdio JSON-RPC)           │   │
+│  │  ② MCP Server → JADX Plugin (HTTP)               │   │
+│  │  ③ JADX Plugin → JADX GUI                        │   │
 │  └─────────────────────────────────────────────────┘   │
 │     │                                                    │
 │     ▼                                                    │
@@ -75,6 +73,17 @@
 │  └─────────────────────────────────────────────────┘   │
 │                                                          │
 └─────────────────────────────────────────────────────────┘
+
+外部依赖（需要单独启动）:
+┌────────────────┐     HTTP      ┌──────────────────┐
+│  MCP Server    │ ←-----------→ │ JADX AI Plugin   │
+│ (uv run...)    │               │ (在JADX-GUI中)   │
+└────────────────┘               └────────┬─────────┘
+                                          │
+                                          ▼
+                                ┌─────────────────┐
+                                │    JADX GUI     │
+                                └─────────────────┘
 ```
 
 ## 项目结构
@@ -205,6 +214,12 @@ JADX_GUI_PATH=~/jadx/jadx-gui                     # JADX-GUI 路径
 
 ### 6. 启动服务
 
+**重要：使用前必须先启动 JADX-GUI 中的 MCP Plugin**
+
+1. 启动 JADX-GUI
+2. 在菜单中找到 MCP Plugin 设置
+3. 配置并启动 MCP Plugin（记下监听端口）
+
 #### 方式一：使用启动脚本（推荐）
 
 ```bash
@@ -280,6 +295,42 @@ agent = create_apk_agent(
 
 # 分析
 response = agent.think("分析 app.apk", context={"apk_path": "app.apk"})
+```
+
+## 使用前准备
+
+**重要：首次使用前需要配置 JADX-GUI 的 MCP Plugin**
+
+### 步骤 1：启动 JADX-GUI
+
+```bash
+# Linux/Mac
+~/jadx/bin/jadx-gui
+
+# Windows
+jadx-gui.exe
+```
+
+### 步骤 2：配置 MCP Plugin
+
+在 JADX-GUI 中：
+1. 打开 Settings/Preferences
+2. 找到 MCP Plugin 或 AI Plugin 配置
+3. 启用 Plugin 并设置监听端口（默认通常是 8080 或其他）
+4. 点击 Start/Apply 启动 Plugin
+
+### 步骤 3：确认 Plugin 运行
+
+在 JADX-GUI 的日志中应该看到类似：
+```
+MCP Server started on port 8080
+```
+
+### 步骤 4：使用我们的 Agent
+
+现在可以启动 Web UI 或使用代码调用：
+```bash
+streamlit run app/web.py
 ```
 
 ## 完整分析流程

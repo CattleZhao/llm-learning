@@ -93,18 +93,25 @@ def main():
         st.markdown("---")
         st.header("🔧 JADX 配置")
 
-        jadx_gui_path = st.text_input(
-            "JADX-GUI 路径",
-            value="",
-            placeholder="jadx-gui 或 /path/to/jadx-gui",
-            help="留空自动查找系统中的 jadx-gui"
-        )
+        st.info("""
+        **使用前准备：**
+        1. 启动 JADX-GUI
+        2. 在 JADX-GUI 中配置并启动 MCP Plugin
+        3. 确保插件监听在正确的端口
+        """)
 
         mcp_server_path = st.text_input(
             "JADX MCP Server 目录",
             value="",
             placeholder="/path/to/jadx-mcp-server",
             help="jadx-mcp-server 的目录路径（包含 jadx_mcp_server.py）"
+        )
+
+        jadx_gui_path = st.text_input(
+            "JADX-GUI 路径（可选）",
+            value="",
+            placeholder="jadx-gui 或 /path/to/jadx-gui",
+            help="用于自动打开 APK，留空则跳过"
         )
 
         st.markdown("---")
