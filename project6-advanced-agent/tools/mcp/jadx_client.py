@@ -2,6 +2,11 @@
 JADX MCP 客户端模块
 
 用于连接 JADX MCP Server 进行 APK 反编译和分析
+
+JADX MCP Server 架构:
+1. JADX 运行在指定端口 (默认 8652)
+2. MCP Server (jadx_mcp_server.py) 连接到 JADX
+3. 本客户端通过 MCP 协议与 MCP Server 通信
 """
 import subprocess
 import tempfile
@@ -12,6 +17,9 @@ import json
 import logging
 import time
 import re
+import asyncio
+from urllib.parse import urlparse
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +30,11 @@ class JMCPClient:
 
     通过 MCP 协议与 JADX MCP Server 通信，
     实现 APK 反编译和代码分析功能
-    """
 
-    # JADX 可执行文件路径
-    JADX_BIN = "jadx"
+    支持:
+    - MCP 协议通信 (当 JADX MCP Server 运行时)
+    - jadx-cli 回退方案 (当 MCP 不可用时)
+    """
 
     # 危险权限列表
     DANGEROUS_PERMISSIONS = {
@@ -50,24 +59,35 @@ class JMCPClient:
     def __init__(
         self,
         server_url: str = "http://localhost:3000",
+        jadx_port: int = 8652,
         jadx_path: Optional[str] = None,
-        auto_open: bool = True
+        mcp_server_path: Optional[str] = None,
+        uv_path: str = "uv",
+        timeout: float = 30.0
     ):
         """
         初始化 MCP 客户端
 
         Args:
-            server_url: MCP Server 地址
-            jadx_path: jadx 可执行文件路径（用于自动打开 APK）
-            auto_open: 是否自动打开 APK
+            server_url: MCP Server HTTP 地址
+            jadx_port: JADX 运行端口
+            jadx_path: jadx 可执行文件路径（回退用）
+            mcp_server_path: JADX MCP Server 路径
+            uv_path: uv 可执行文件路径
+            timeout: 请求超时时间
         """
-        self.server_url = server_url
+        self.server_url = server_url.rstrip("/")
+        self.jadx_port = jadx_port
         self.jadx_path = jadx_path or self._find_jadx()
-        self.auto_open = auto_open
+        self.mcp_server_path = mcp_server_path
+        self.uv_path = uv_path
+        self.timeout = timeout
+
         self._connected = False
         self._current_apk: Optional[str] = None
-        self._jadx_process: Optional[subprocess.Popen] = None
+        self._mcp_process: Optional[subprocess.Popen] = None
         self._output_dir: Optional[str] = None
+        self._use_fallback = False
 
     def _find_jadx(self) -> str:
         """查找 jadx 可执行文件"""
@@ -93,13 +113,84 @@ class JMCPClient:
         Returns:
             连接是否成功
         """
-        # TODO: 实现 MCP 握手协议
+        # 尝试 ping MCP Server
+        try:
+            response = httpx.post(
+                f"{self.server_url}/ping",
+                timeout=5.0
+            )
+            if response.status_code == 200:
+                self._connected = True
+                logger.info(f"已连接到 MCP Server: {self.server_url}")
+                return True
+        except Exception as e:
+            logger.warning(f"MCP Server 不可用: {e}")
+
+        # 尝试启动 MCP Server
+        if self.mcp_server_path:
+            logger.info("尝试启动 JADX MCP Server...")
+            return self._start_mcp_server()
+
+        # 标记使用回退模式
+        self._use_fallback = True
+        logger.info("使用 jadx-cli 回退模式")
         self._connected = True
         return True
 
+    def _start_mcp_server(self) -> bool:
+        """启动 JADX MCP Server"""
+        if not Path(self.mcp_server_path).exists():
+            logger.warning(f"MCP Server 路径不存在: {self.mcp_server_path}")
+            self._use_fallback = True
+            return True
+
+        try:
+            # 检查 uv 是否可用
+            subprocess.run(
+                [self.uv_path, "--version"],
+                capture_output=True,
+                timeout=5
+            )
+
+            # 启动 MCP Server
+            cmd = [
+                self.uv_path,
+                "--directory",
+                self.mcp_server_path,
+                "run",
+                "jadx_mcp_server.py",
+                "--jadx-port",
+                str(self.jadx_port)
+            ]
+
+            self._mcp_process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+
+            # 等待启动
+            time.sleep(2)
+
+            # 检查是否成功
+            if self._mcp_process.poll() is None:
+                logger.info("JADX MCP Server 启动成功")
+                return True
+            else:
+                stderr = self._mcp_process.stderr.read()
+                logger.error(f"MCP Server 启动失败: {stderr}")
+                self._use_fallback = True
+                return True
+
+        except Exception as e:
+            logger.error(f"启动 MCP Server 失败: {e}")
+            self._use_fallback = True
+            return True
+
     def open_apk(self, apk_path: str) -> Dict[str, Any]:
         """
-        在 JADX 中打开 APK（通过 MCP 触发或启动 jadx-gui）
+        在 JADX 中打开 APK
 
         Args:
             apk_path: APK 文件路径
@@ -113,27 +204,34 @@ class JMCPClient:
 
         self._current_apk = str(apk_file)
 
-        # 方法1: 尝试通过 MCP 调用 jadx.open_apk
-        mcp_result = self._call_tool("jadx.open_apk", {
+        # 如果使用回退模式，直接用 jadx-cli 处理
+        if self._use_fallback:
+            return self._open_apk_fallback(apk_path)
+
+        # 通过 MCP 打开
+        result = self._call_mcp_tool("jadx_open_apk", {
             "apk_path": apk_path
         })
 
-        # 如果 MCP 成功，直接返回
-        if mcp_result.get("success"):
-            return mcp_result
+        # 如果 MCP 失败，切换到回退模式
+        if not result.get("success"):
+            logger.warning("MCP 打开 APK 失败，切换到回退模式")
+            self._use_fallback = True
+            return self._open_apk_fallback(apk_path)
 
-        # 方法2: MCP 失败时，使用 jadx-cli 预处理
-        logger.info(f"MCP 不可用，使用 jadx-cli 预处理: {apk_path}")
+        return result
 
-        # 创建临时输出目录
-        self._output_dir = tempfile.mkdtemp(prefix="jadx_mcp_")
+    def _open_apk_fallback(self, apk_path: str) -> Dict[str, Any]:
+        """使用 jadx-cli 打开 APK（回退方案）"""
+        logger.info(f"使用 jadx-cli 处理: {apk_path}")
 
-        # 使用 jadx-cli 反编译（只反编译代码，不反编译资源）
+        self._output_dir = tempfile.mkdtemp(prefix="jadx_fallback_")
+
         cmd = [
             self.jadx_path,
             "-d", self._output_dir,
-            "--no-res",  # 不反编译资源
-            "--no-imports",  # 不优化导入
+            "--no-res",
+            "--no-imports",
             str(apk_path)
         ]
 
@@ -142,14 +240,15 @@ class JMCPClient:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=300  # 5分钟超时
+                timeout=300
             )
 
             if result.returncode != 0:
-                logger.error(f"jadx 处理失败: {result.stderr}")
-                return {"success": False, "error": result.stderr}
-
-            logger.info(f"jadx 处理完成，输出目录: {self._output_dir}")
+                return {
+                    "success": False,
+                    "error": result.stderr,
+                    "method": "jadx-cli-failed"
+                }
 
             return {
                 "success": True,
@@ -163,53 +262,41 @@ class JMCPClient:
         except FileNotFoundError:
             return {
                 "success": False,
-                "error": f"未找到 jadx。请安装: wget https://github.com/skylot/jadx/releases/download/v1.5.0/jadx-1.5.0.zip"
+                "error": "未找到 jadx，请安装: wget https://github.com/skylot/jadx/releases/download/v1.5.0/jadx-1.5.0.zip"
             }
 
-    def decompile_apk(self, apk_path: str) -> Dict[str, Any]:
-        """
-        反编译 APK 文件
+    def _call_mcp_tool(self, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """调用 MCP 工具"""
+        if self._use_fallback:
+            return {"success": False, "error": "fallback mode"}
 
-        Args:
-            apk_path: APK 文件路径
-
-        Returns:
-            反编译结果，包含代码结构信息
-        """
-        # 确保已打开 APK
-        if self._current_apk != apk_path:
-            self.open_apk(apk_path)
-
-        return self._call_tool("jadx.decompile", {
-            "apk_path": apk_path,
-            "output_format": "tree"
-        })
+        try:
+            response = httpx.post(
+                f"{self.server_url}/tools/{tool_name}",
+                json=params,
+                timeout=self.timeout
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.debug(f"MCP 调用失败: {e}")
+            return {"success": False, "error": str(e)}
 
     def get_manifest(self, apk_path: Optional[str] = None) -> Dict[str, Any]:
-        """
-        获取 AndroidManifest.xml 内容
-
-        Args:
-            apk_path: APK 文件路径（可选，如果已打开则使用当前 APK）
-
-        Returns:
-            Manifest 解析结果
-        """
-        # 优先从本地文件解析
-        if self._output_dir:
+        """获取 AndroidManifest.xml 内容"""
+        if self._use_fallback or self._output_dir:
             return self._parse_local_manifest()
 
-        # 否则通过 MCP 获取
-        if apk_path:
-            if self._current_apk != apk_path:
-                self.open_apk(apk_path)
+        if apk_path and self._current_apk != apk_path:
+            self.open_apk(apk_path)
 
-        return self._call_tool("jadx.get_manifest", {
+        result = self._call_mcp_tool("jadx_get_manifest", {
             "apk_path": self._current_apk
         })
+        return result if result.get("success") else {}
 
     def _parse_local_manifest(self) -> Dict[str, Any]:
-        """从本地反编译结果解析 Manifest"""
+        """从本地解析 Manifest"""
         if not self._output_dir:
             return {}
 
@@ -234,7 +321,6 @@ class JMCPClient:
                 "providers": []
             }
 
-            # 解析权限
             for perm in root.findall("uses-permission"):
                 perm_name = perm.get(f"{{{ns['android']}}}name")
                 if perm_name:
@@ -242,7 +328,6 @@ class JMCPClient:
                     if perm_name in self.DANGEROUS_PERMISSIONS:
                         result["permissions_dangerous"].append(perm_name)
 
-            # 解析组件
             for app in root.findall("application"):
                 for activity in app.findall("activity"):
                     name = activity.get(f"{{{ns['android']}}}name")
@@ -268,15 +353,7 @@ class JMCPClient:
             return {}
 
     def get_permissions(self, apk_path: Optional[str] = None) -> Dict[str, Any]:
-        """
-        获取 APK 声明的权限列表
-
-        Args:
-            apk_path: APK 文件路径（可选）
-
-        Returns:
-            权限信息，包含全部权限和危险权限
-        """
+        """获取权限列表"""
         manifest = self.get_manifest(apk_path)
         return {
             "all": manifest.get("permissions", []),
@@ -285,37 +362,16 @@ class JMCPClient:
             "dangerous_count": len(manifest.get("permissions_dangerous", []))
         }
 
-    def get_package_paths(self) -> List[str]:
-        """
-        获取所有包路径
-
-        Returns:
-            包路径列表
-        """
-        if not self._output_dir:
-            # 通过 MCP 获取
-            result = self._call_tool("jadx.get_package_paths", {})
-            return result.get("paths", [])
-
-        # 从本地扫描
-        paths = []
-        sources_dir = Path(self._output_dir) / "sources"
-        if sources_dir.exists():
-            for java_file in sources_dir.rglob("*.java"):
-                rel_path = java_file.relative_to(sources_dir)
-                dir_path = str(rel_path.parent)
-                if dir_path != "." and dir_path not in paths:
-                    paths.append(dir_path)
-
-        return sorted(paths)
-
     def get_code_paths(self) -> List[str]:
-        """
-        获取所有代码文件路径（用于规则匹配）
+        """获取代码文件路径"""
+        if self._use_fallback or self._output_dir:
+            return self._get_local_code_paths()
 
-        Returns:
-            代码文件路径列表
-        """
+        result = self._call_mcp_tool("jadx_get_code_paths", {})
+        return result.get("paths", []) if result.get("success") else []
+
+    def _get_local_code_paths(self) -> List[str]:
+        """从本地获取代码路径"""
         if not self._output_dir:
             return []
 
@@ -330,97 +386,19 @@ class JMCPClient:
 
         return paths
 
-    def search_code(
-        self,
-        apk_path: str,
-        pattern: str,
-        search_type: str = "text"
-    ) -> List[Dict[str, Any]]:
-        """
-        在反编译代码中搜索
-
-        Args:
-            apk_path: APK 文件路径
-            pattern: 搜索模式
-            search_type: 搜索类型 (text, regex, api)
-
-        Returns:
-            匹配结果列表
-        """
-        # 如果有本地输出，直接搜索
-        if self._output_dir:
-            return self._search_local_code(pattern, search_type)
-
-        # 否则通过 MCP
-        return self._call_tool("jadx.search", {
-            "apk_path": apk_path,
-            "pattern": pattern,
-            "type": search_type
-        })
-
-    def _search_local_code(self, pattern: str, search_type: str) -> List[Dict[str, Any]]:
-        """在本地代码中搜索"""
-        results = []
-        sources_dir = Path(self._output_dir) / "sources"
-        if not sources_dir.exists():
-            return results
-
-        # 编译正则表达式
-        if search_type == "regex":
-            try:
-                regex = re.compile(pattern)
-            except re.error:
-                return results
-        else:
-            regex = None
-
-        for java_file in sources_dir.rglob("*.java"):
-            try:
-                content = java_file.read_text(encoding="utf-8", errors="ignore")
-                lines = content.split("\n")
-
-                for line_num, line in enumerate(lines, 1):
-                    matched = False
-                    if search_type == "regex" and regex:
-                        matched = regex.search(line) is not None
-                    else:
-                        matched = pattern in line
-
-                    if matched:
-                        results.append({
-                            "file": str(java_file.relative_to(sources_dir)),
-                            "line": line_num,
-                            "code": line.strip()
-                        })
-            except Exception:
-                pass
-
-        return results
-
     def get_strings(self, apk_path: Optional[str] = None, min_length: int = 4) -> List[str]:
-        """
-        提取 APK 中的字符串
-
-        Args:
-            apk_path: APK 文件路径（可选）
-            min_length: 最小字符串长度
-
-        Returns:
-            字符串列表
-        """
-        # 如果有本地输出，直接提取
-        if self._output_dir:
+        """提取字符串"""
+        if self._use_fallback or self._output_dir:
             return self._extract_local_strings(min_length)
 
-        # 否则通过 MCP
-        result = self._call_tool("jadx.get_strings", {
+        result = self._call_mcp_tool("jadx_get_strings", {
             "apk_path": apk_path or self._current_apk,
             "min_length": min_length
         })
-        return result.get("strings", []) if isinstance(result, dict) else result
+        return result.get("strings", []) if result.get("success") else []
 
     def _extract_local_strings(self, min_length: int) -> List[str]:
-        """从本地代码中提取字符串"""
+        """从本地提取字符串"""
         strings = set()
         sources_dir = Path(self._output_dir) / "sources"
 
@@ -438,29 +416,18 @@ class JMCPClient:
         return sorted(strings)
 
     def get_apis(self, apk_path: Optional[str] = None) -> List[Dict[str, Any]]:
-        """
-        获取 APK 使用的 API 调用
-
-        Args:
-            apk_path: APK 文件路径（可选）
-
-        Returns:
-            API 调用列表
-        """
-        # 如果有本地输出，直接分析
-        if self._output_dir:
+        """获取 API 调用"""
+        if self._use_fallback or self._output_dir:
             return self._analyze_local_apis()
 
-        # 否则通过 MCP
-        result = self._call_tool("jadx.get_apis", {
+        result = self._call_mcp_tool("jadx_get_apis", {
             "apk_path": apk_path or self._current_apk
         })
-        return result.get("apis", []) if isinstance(result, dict) else result
+        return result.get("apis", []) if result.get("success") else []
 
     def _analyze_local_apis(self) -> List[Dict[str, Any]]:
-        """分析本地代码中的 API 调用"""
+        """分析本地 API 调用"""
         apis = []
-
         api_patterns = [
             (r'(\w+)\.getDeviceId\(\)', 'TelephonyManager', 'getDeviceId'),
             (r'(\w+)\.getSubscriberId\(\)', 'TelephonyManager', 'getSubscriberId'),
@@ -494,15 +461,7 @@ class JMCPClient:
         return apis
 
     def get_network_info(self, apk_path: Optional[str] = None) -> Dict[str, Any]:
-        """
-        分析网络通信信息
-
-        Args:
-            apk_path: APK 文件路径（可选）
-
-        Returns:
-            网络信息
-        """
+        """分析网络通信信息"""
         info = {
             "urls": [],
             "ips": [],
@@ -527,7 +486,6 @@ class JMCPClient:
                     elif match.startswith("http://"):
                         info["has_http"] = True
 
-                    from urllib.parse import urlparse
                     parsed = urlparse(match)
                     if parsed.netloc and parsed.netloc not in info["domains"]:
                         info["domains"].append(parsed.netloc)
@@ -538,35 +496,73 @@ class JMCPClient:
 
         return info
 
-    def _call_tool(self, tool_name: str, params: Dict[str, Any]) -> Any:
-        """
-        调用 MCP 工具
+    def search_code(
+        self,
+        apk_path: str,
+        pattern: str,
+        search_type: str = "text"
+    ) -> List[Dict[str, Any]]:
+        """搜索代码"""
+        if self._use_fallback or self._output_dir:
+            return self._search_local_code(pattern, search_type)
 
-        Args:
-            tool_name: 工具名称
-            params: 工具参数
+        result = self._call_mcp_tool("jadx_search", {
+            "apk_path": apk_path,
+            "pattern": pattern,
+            "type": search_type
+        })
+        return result.get("results", []) if result.get("success") else []
 
-        Returns:
-            工具执行结果
-        """
-        # TODO: 实现 MCP 协议通信
-        # 这里先返回模拟数据或使用本地处理
-        return self._mock_response(tool_name, params)
+    def _search_local_code(self, pattern: str, search_type: str) -> List[Dict[str, Any]]:
+        """本地搜索代码"""
+        results = []
+        sources_dir = Path(self._output_dir) / "sources"
+        if not sources_dir.exists():
+            return results
 
-    def _mock_response(self, tool_name: str, params: Dict[str, Any]) -> Any:
-        """模拟 MCP 响应（MCP 不可用时使用）"""
-        # 返回失败，让上层使用本地处理
-        return {"success": False, "error": "MCP not available"}
+        regex = re.compile(pattern) if search_type == "regex" else None
+
+        for java_file in sources_dir.rglob("*.java"):
+            try:
+                content = java_file.read_text(encoding="utf-8", errors="ignore")
+                lines = content.split("\n")
+
+                for line_num, line in enumerate(lines, 1):
+                    matched = (
+                        regex.search(line) is not None
+                        if regex
+                        else pattern in line
+                    )
+                    if matched:
+                        results.append({
+                            "file": str(java_file.relative_to(sources_dir)),
+                            "line": line_num,
+                            "code": line.strip()
+                        })
+            except Exception:
+                pass
+
+        return results
+
+    def decompile_apk(self, apk_path: str) -> Dict[str, Any]:
+        """反编译 APK（兼容旧 API）"""
+        self.open_apk(apk_path)
+        return {
+            "success": True,
+            "packages": [],
+            "activities": [],
+            "services": []
+        }
 
     def close(self):
-        """关闭客户端，清理资源"""
-        if self._jadx_process:
+        """关闭客户端"""
+        if hasattr(self, '_mcp_process') and self._mcp_process:
             try:
-                self._jadx_process.terminate()
-                self._jadx_process.wait(timeout=5)
+                self._mcp_process.terminate()
+                self._mcp_process.wait(timeout=5)
             except:
-                self._jadx_process.kill()
-            self._jadx_process = None
+                self._mcp_process.kill()
+            self._mcp_process = None
 
     def __del__(self):
         """析构函数"""
@@ -576,24 +572,30 @@ class JMCPClient:
 # 便捷函数
 def create_mcp_client(
     server_url: str = "http://localhost:3000",
+    jadx_port: int = 8652,
     jadx_path: Optional[str] = None,
-    auto_open: bool = True
+    mcp_server_path: Optional[str] = None,
+    uv_path: str = "uv"
 ) -> JMCPClient:
     """
     创建 MCP 客户端
 
     Args:
         server_url: MCP Server 地址
+        jadx_port: JADX 端口
         jadx_path: jadx 可执行文件路径
-        auto_open: 是否自动打开 APK
+        mcp_server_path: JADX MCP Server 路径
+        uv_path: uv 可执行文件路径
 
     Returns:
         JMCPClient 实例
     """
     client = JMCPClient(
         server_url=server_url,
+        jadx_port=jadx_port,
         jadx_path=jadx_path,
-        auto_open=auto_open
+        mcp_server_path=mcp_server_path,
+        uv_path=uv_path
     )
     client.connect()
     return client

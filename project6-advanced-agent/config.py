@@ -52,6 +52,23 @@ class Settings:
         default_factory=lambda: os.getenv("ENABLE_TOOL_VALIDATION", "true").lower() == "true"
     )
 
+    # ========== JADX MCP 配置 ==========
+    jadx_mcp_server_url: str = field(
+        default_factory=lambda: os.getenv("JADX_MCP_SERVER_URL", "http://localhost:3000")
+    )
+    jadx_port: int = field(
+        default_factory=lambda: int(os.getenv("JADX_PORT", "8652"))
+    )
+    jadx_path: str = field(
+        default_factory=lambda: os.getenv("JADX_PATH", "jadx")
+    )
+    jadx_mcp_server_path: Optional[str] = field(
+        default_factory=lambda: os.getenv("JADX_MCP_SERVER_PATH")
+    )
+    uv_path: str = field(
+        default_factory=lambda: os.getenv("UV_PATH", "uv")
+    )
+
     # ========== 日志配置 ==========
     log_level: str = field(
         default_factory=lambda: os.getenv("LOG_LEVEL", "INFO")
