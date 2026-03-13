@@ -1,127 +1,139 @@
 """
-JADX 命令行工具封装
+JADX MCP 客户端模块
 
-使用 jadx-cli 进行 APK 反编译和分析
+用于连接 JADX MCP Server 进行 APK 反编译和分析
 """
 import subprocess
 import tempfile
-import shutil
-import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import json
 import logging
+import time
+import re
 
 logger = logging.getLogger(__name__)
 
 
-class JadxWrapper:
+class JMCPClient:
     """
-    JADX 命令行工具封装
+    JADX MCP 客户端
 
-    使用 jadx-cli 直接反编译 APK，无需 GUI 或 MCP Server
+    通过 MCP 协议与 JADX MCP Server 通信，
+    实现 APK 反编译和代码分析功能
     """
+
+    # JADX 可执行文件路径
+    JADX_BIN = "jadx"
 
     # 危险权限列表
     DANGEROUS_PERMISSIONS = {
-        # 位置相关
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_BACKGROUND_LOCATION",
-        # 短信相关
         "android.permission.READ_SMS",
         "android.permission.SEND_SMS",
         "android.permission.RECEIVE_SMS",
-        # 电话相关
         "android.permission.READ_PHONE_STATE",
         "android.permission.CALL_PHONE",
         "android.permission.READ_CALL_LOG",
         "android.permission.READ_CONTACTS",
-        # 存储相关
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        # 摄像头/麦克风
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
-        # 其他
         "android.permission.GET_ACCOUNTS",
         "android.permission.READ_CALENDAR",
     }
 
     def __init__(
         self,
+        server_url: str = "http://localhost:3000",
         jadx_path: Optional[str] = None,
-        output_dir: Optional[str] = None,
-        keep_output: bool = False
+        auto_open: bool = True
     ):
         """
-        初始化 JADX 封装器
+        初始化 MCP 客户端
 
         Args:
-            jadx_path: jadx 可执行文件路径，默认从 PATH 查找
-            output_dir: 反编译输出目录，默认使用临时目录
-            keep_output: 是否保留反编译输出
+            server_url: MCP Server 地址
+            jadx_path: jadx 可执行文件路径（用于自动打开 APK）
+            auto_open: 是否自动打开 APK
         """
+        self.server_url = server_url
         self.jadx_path = jadx_path or self._find_jadx()
-        self.output_dir = output_dir or tempfile.mkdtemp(prefix="jadx_output_")
-        self.keep_output = keep_output
+        self.auto_open = auto_open
+        self._connected = False
         self._current_apk: Optional[str] = None
-        self._decompiled: bool = False
+        self._jadx_process: Optional[subprocess.Popen] = None
+        self._output_dir: Optional[str] = None
 
     def _find_jadx(self) -> str:
         """查找 jadx 可执行文件"""
-        # 先检查 PATH 中是否有 jadx
         for name in ["jadx", "jadx.bat"]:
             try:
                 result = subprocess.run(
                     ["which", name] if name != "jadx.bat" else ["where", name],
                     capture_output=True,
-                    text=True
+                    text=True,
+                    timeout=5
                 )
                 if result.returncode == 0:
                     return result.stdout.strip()
-            except FileNotFoundError:
+            except (FileNotFoundError, subprocess.TimeoutExpired):
                 pass
 
-        # 默认返回 jadx，假设在 PATH 中
         return "jadx"
 
-    def decompile_apk(
-        self,
-        apk_path: str,
-        force: bool = False
-    ) -> Dict[str, Any]:
+    def connect(self) -> bool:
         """
-        反编译 APK 文件
+        连接到 MCP Server
+
+        Returns:
+            连接是否成功
+        """
+        # TODO: 实现 MCP 握手协议
+        self._connected = True
+        return True
+
+    def open_apk(self, apk_path: str) -> Dict[str, Any]:
+        """
+        在 JADX 中打开 APK（通过 MCP 触发或启动 jadx-gui）
 
         Args:
             apk_path: APK 文件路径
-            force: 是否强制重新反编译
 
         Returns:
-            反编译结果，包含代码结构信息
+            打开结果
         """
         apk_file = Path(apk_path)
         if not apk_file.exists():
             raise FileNotFoundError(f"APK 文件不存在: {apk_path}")
 
-        # 检查是否已经反编译过
-        if self._current_apk == apk_path and self._decompiled and not force:
-            return self._get_decompile_info()
+        self._current_apk = str(apk_file)
 
-        # 清理旧输出
-        if self._decompiled and not self.keep_output:
-            self._cleanup_output()
+        # 方法1: 尝试通过 MCP 调用 jadx.open_apk
+        mcp_result = self._call_tool("jadx.open_apk", {
+            "apk_path": apk_path
+        })
 
-        # 执行反编译
-        logger.info(f"正在反编译 APK: {apk_path}")
+        # 如果 MCP 成功，直接返回
+        if mcp_result.get("success"):
+            return mcp_result
 
+        # 方法2: MCP 失败时，使用 jadx-cli 预处理
+        logger.info(f"MCP 不可用，使用 jadx-cli 预处理: {apk_path}")
+
+        # 创建临时输出目录
+        self._output_dir = tempfile.mkdtemp(prefix="jadx_mcp_")
+
+        # 使用 jadx-cli 反编译（只反编译代码，不反编译资源）
         cmd = [
             self.jadx_path,
-            "-d", self.output_dir,
-            "--no-res",  # 不反编译资源文件（加快速度）
-            "--deobf",   # 简单的反混淆
+            "-d", self._output_dir,
+            "--no-res",  # 不反编译资源
+            "--no-imports",  # 不优化导入
             str(apk_path)
         ]
 
@@ -134,92 +146,80 @@ class JadxWrapper:
             )
 
             if result.returncode != 0:
-                logger.error(f"jadx 执行失败: {result.stderr}")
-                raise RuntimeError(f"反编译失败: {result.stderr}")
+                logger.error(f"jadx 处理失败: {result.stderr}")
+                return {"success": False, "error": result.stderr}
 
-            self._current_apk = apk_path
-            self._decompiled = True
+            logger.info(f"jadx 处理完成，输出目录: {self._output_dir}")
 
-            logger.info(f"反编译完成，输出目录: {self.output_dir}")
-            return self._get_decompile_info()
+            return {
+                "success": True,
+                "apk_path": apk_path,
+                "output_dir": self._output_dir,
+                "method": "jadx-cli"
+            }
 
         except subprocess.TimeoutExpired:
-            raise RuntimeError("反编译超时（5分钟）")
+            return {"success": False, "error": "处理超时"}
         except FileNotFoundError:
-            raise RuntimeError(
-                f"未找到 jadx 命令。请安装 jadx:\n"
-                f"  wget https://github.com/skylot/jadx/releases/download/v1.5.0/jadx-1.5.0.zip\n"
-                f"  unzip jadx-1.5.0.zip -d ~/jadx\n"
-                f"  export PATH=$PATH:~/jadx/jadx-1.5.0"
-            )
+            return {
+                "success": False,
+                "error": f"未找到 jadx。请安装: wget https://github.com/skylot/jadx/releases/download/v1.5.0/jadx-1.5.0.zip"
+            }
 
-    def _get_decompile_info(self) -> Dict[str, Any]:
-        """获取反编译信息"""
-        if not self._decompiled:
-            return {"success": False, "error": "未反编译任何 APK"}
+    def decompile_apk(self, apk_path: str) -> Dict[str, Any]:
+        """
+        反编译 APK 文件
 
-        info = {
-            "success": True,
-            "output_dir": self.output_dir,
-            "packages": [],
-            "activities": [],
-            "services": [],
-            "receivers": [],
-            "providers": []
-        }
+        Args:
+            apk_path: APK 文件路径
 
-        # 扫描包结构
-        sources_dir = Path(self.output_dir) / "sources"
-        if sources_dir.exists():
-            info["packages"] = self._scan_packages(sources_dir)
+        Returns:
+            反编译结果，包含代码结构信息
+        """
+        # 确保已打开 APK
+        if self._current_apk != apk_path:
+            self.open_apk(apk_path)
 
-        # 解析 manifest
-        manifest = self.get_manifest()
-        if manifest:
-            info.update({
-                "package": manifest.get("package"),
-                "version_code": manifest.get("version_code"),
-                "version_name": manifest.get("version_name"),
-                "activities": manifest.get("activities", []),
-                "services": manifest.get("services", []),
-                "receivers": manifest.get("receivers", []),
-                "providers": manifest.get("providers", [])
-            })
+        return self._call_tool("jadx.decompile", {
+            "apk_path": apk_path,
+            "output_format": "tree"
+        })
 
-        return info
-
-    def _scan_packages(self, sources_dir: Path) -> List[str]:
-        """扫描包结构"""
-        packages = set()
-
-        for java_file in sources_dir.rglob("*.java"):
-            # 将文件路径转换为包名
-            rel_path = java_file.relative_to(sources_dir)
-            parts = list(rel_path.parts[:-1])  # 去掉文件名
-            if parts:
-                packages.add(".".join(parts))
-
-        return sorted(packages)
-
-    def get_manifest(self) -> Dict[str, Any]:
+    def get_manifest(self, apk_path: Optional[str] = None) -> Dict[str, Any]:
         """
         获取 AndroidManifest.xml 内容
+
+        Args:
+            apk_path: APK 文件路径（可选，如果已打开则使用当前 APK）
 
         Returns:
             Manifest 解析结果
         """
-        if not self._decompiled:
+        # 优先从本地文件解析
+        if self._output_dir:
+            return self._parse_local_manifest()
+
+        # 否则通过 MCP 获取
+        if apk_path:
+            if self._current_apk != apk_path:
+                self.open_apk(apk_path)
+
+        return self._call_tool("jadx.get_manifest", {
+            "apk_path": self._current_apk
+        })
+
+    def _parse_local_manifest(self) -> Dict[str, Any]:
+        """从本地反编译结果解析 Manifest"""
+        if not self._output_dir:
             return {}
 
-        manifest_path = Path(self.output_dir) / "AndroidManifest.xml"
+        manifest_path = Path(self._output_dir) / "AndroidManifest.xml"
         if not manifest_path.exists():
             return {}
 
         try:
             tree = ET.parse(manifest_path)
             root = tree.getroot()
-
-            # 处理 Android 命名空间
             ns = {"android": "http://schemas.android.com/apk/res/android"}
 
             result = {
@@ -248,17 +248,14 @@ class JadxWrapper:
                     name = activity.get(f"{{{ns['android']}}}name")
                     if name:
                         result["activities"].append(name)
-
                 for service in app.findall("service"):
                     name = service.get(f"{{{ns['android']}}}name")
                     if name:
                         result["services"].append(name)
-
                 for receiver in app.findall("receiver"):
                     name = receiver.get(f"{{{ns['android']}}}name")
                     if name:
                         result["receivers"].append(name)
-
                 for provider in app.findall("provider"):
                     name = provider.get(f"{{{ns['android']}}}name")
                     if name:
@@ -270,14 +267,17 @@ class JadxWrapper:
             logger.error(f"解析 Manifest 失败: {e}")
             return {}
 
-    def get_permissions(self) -> Dict[str, Any]:
+    def get_permissions(self, apk_path: Optional[str] = None) -> Dict[str, Any]:
         """
         获取 APK 声明的权限列表
+
+        Args:
+            apk_path: APK 文件路径（可选）
 
         Returns:
             权限信息，包含全部权限和危险权限
         """
-        manifest = self.get_manifest()
+        manifest = self.get_manifest(apk_path)
         return {
             "all": manifest.get("permissions", []),
             "dangerous": manifest.get("permissions_dangerous", []),
@@ -287,30 +287,52 @@ class JadxWrapper:
 
     def get_package_paths(self) -> List[str]:
         """
-        获取所有包路径（转换为正则匹配格式）
+        获取所有包路径
 
         Returns:
-            包路径列表，如 ["com/example/app/", "com/example/app/activity/"]
+            包路径列表
         """
-        if not self._decompiled:
-            return []
+        if not self._output_dir:
+            # 通过 MCP 获取
+            result = self._call_tool("jadx.get_package_paths", {})
+            return result.get("paths", [])
 
-        sources_dir = Path(self.output_dir) / "sources"
-        if not sources_dir.exists():
-            return []
-
-        paths = set()
-        for java_file in sources_dir.rglob("*.java"):
-            # 转换为正则格式的路径
-            rel_path = java_file.relative_to(sources_dir)
-            dir_path = str(rel_path.parent)
-            if dir_path != ".":
-                paths.add(dir_path)
+        # 从本地扫描
+        paths = []
+        sources_dir = Path(self._output_dir) / "sources"
+        if sources_dir.exists():
+            for java_file in sources_dir.rglob("*.java"):
+                rel_path = java_file.relative_to(sources_dir)
+                dir_path = str(rel_path.parent)
+                if dir_path != "." and dir_path not in paths:
+                    paths.append(dir_path)
 
         return sorted(paths)
 
+    def get_code_paths(self) -> List[str]:
+        """
+        获取所有代码文件路径（用于规则匹配）
+
+        Returns:
+            代码文件路径列表
+        """
+        if not self._output_dir:
+            return []
+
+        paths = []
+        sources_dir = Path(self._output_dir) / "sources"
+        if not sources_dir.exists():
+            return paths
+
+        for java_file in sources_dir.rglob("*.java"):
+            rel_path = java_file.relative_to(sources_dir)
+            paths.append(str(rel_path).replace(".java", ""))
+
+        return paths
+
     def search_code(
         self,
+        apk_path: str,
         pattern: str,
         search_type: str = "text"
     ) -> List[Dict[str, Any]]:
@@ -318,17 +340,28 @@ class JadxWrapper:
         在反编译代码中搜索
 
         Args:
+            apk_path: APK 文件路径
             pattern: 搜索模式
             search_type: 搜索类型 (text, regex, api)
 
         Returns:
             匹配结果列表
         """
-        if not self._decompiled:
-            return []
+        # 如果有本地输出，直接搜索
+        if self._output_dir:
+            return self._search_local_code(pattern, search_type)
 
+        # 否则通过 MCP
+        return self._call_tool("jadx.search", {
+            "apk_path": apk_path,
+            "pattern": pattern,
+            "type": search_type
+        })
+
+    def _search_local_code(self, pattern: str, search_type: str) -> List[Dict[str, Any]]:
+        """在本地代码中搜索"""
         results = []
-        sources_dir = Path(self.output_dir) / "sources"
+        sources_dir = Path(self._output_dir) / "sources"
         if not sources_dir.exists():
             return results
 
@@ -337,12 +370,10 @@ class JadxWrapper:
             try:
                 regex = re.compile(pattern)
             except re.error:
-                logger.error(f"无效的正则表达式: {pattern}")
                 return results
         else:
             regex = None
 
-        # 搜索所有 Java 文件
         for java_file in sources_dir.rglob("*.java"):
             try:
                 content = java_file.read_text(encoding="utf-8", errors="ignore")
@@ -359,39 +390,44 @@ class JadxWrapper:
                         results.append({
                             "file": str(java_file.relative_to(sources_dir)),
                             "line": line_num,
-                            "code": line.strip(),
-                            "context": self._get_context(lines, line_num - 1)
+                            "code": line.strip()
                         })
-            except Exception as e:
-                logger.debug(f"搜索文件失败 {java_file}: {e}")
+            except Exception:
+                pass
 
         return results
 
-    def _get_context(self, lines: List[str], line_idx: int, context_size: int = 2) -> str:
-        """获取代码上下文"""
-        start = max(0, line_idx - context_size)
-        end = min(len(lines), line_idx + context_size + 1)
-        return "\n".join(lines[start:end])
-
-    def get_strings(self, min_length: int = 4) -> List[str]:
+    def get_strings(self, apk_path: Optional[str] = None, min_length: int = 4) -> List[str]:
         """
         提取 APK 中的字符串
 
         Args:
+            apk_path: APK 文件路径（可选）
             min_length: 最小字符串长度
 
         Returns:
             字符串列表
         """
-        strings = set()
+        # 如果有本地输出，直接提取
+        if self._output_dir:
+            return self._extract_local_strings(min_length)
 
-        # 从 Java 文件中提取字符串
-        sources_dir = Path(self.output_dir) / "sources"
+        # 否则通过 MCP
+        result = self._call_tool("jadx.get_strings", {
+            "apk_path": apk_path or self._current_apk,
+            "min_length": min_length
+        })
+        return result.get("strings", []) if isinstance(result, dict) else result
+
+    def _extract_local_strings(self, min_length: int) -> List[str]:
+        """从本地代码中提取字符串"""
+        strings = set()
+        sources_dir = Path(self._output_dir) / "sources"
+
         if sources_dir.exists():
             for java_file in sources_dir.rglob("*.java"):
                 try:
                     content = java_file.read_text(encoding="utf-8", errors="ignore")
-                    # 匹配 Java 字符串字面量
                     for match in re.finditer(r'"([^"]+)"', content):
                         s = match.group(1)
                         if len(s) >= min_length:
@@ -401,28 +437,39 @@ class JadxWrapper:
 
         return sorted(strings)
 
-    def get_apis(self) -> List[Dict[str, Any]]:
+    def get_apis(self, apk_path: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         获取 APK 使用的 API 调用
 
+        Args:
+            apk_path: APK 文件路径（可选）
+
         Returns:
-            API 调用列表，包含类名、方法名、调用位置
+            API 调用列表
         """
+        # 如果有本地输出，直接分析
+        if self._output_dir:
+            return self._analyze_local_apis()
+
+        # 否则通过 MCP
+        result = self._call_tool("jadx.get_apis", {
+            "apk_path": apk_path or self._current_apk
+        })
+        return result.get("apis", []) if isinstance(result, dict) else result
+
+    def _analyze_local_apis(self) -> List[Dict[str, Any]]:
+        """分析本地代码中的 API 调用"""
         apis = []
 
-        # 常见敏感 API 模式
         api_patterns = [
             (r'(\w+)\.getDeviceId\(\)', 'TelephonyManager', 'getDeviceId'),
             (r'(\w+)\.getSubscriberId\(\)', 'TelephonyManager', 'getSubscriberId'),
             (r'(\w+)\.sendTextMessage\(', 'SmsManager', 'sendTextMessage'),
             (r'(\w+)\.requestLocationUpdates\(', 'LocationManager', 'requestLocationUpdates'),
-            (r'(\w+)\.getLastKnownLocation\(', 'LocationManager', 'getLastKnownLocation'),
             (r'Runtime\.getRuntime\(\)\.exec\(', 'Runtime', 'exec'),
-            (r'ProcessBuilder\(', 'ProcessBuilder', '<init>'),
-            (r'ClassLoader\.getSystemClassLoader\(\)', 'ClassLoader', 'getSystemClassLoader'),
         ]
 
-        sources_dir = Path(self.output_dir) / "sources"
+        sources_dir = Path(self._output_dir) / "sources"
         if not sources_dir.exists():
             return apis
 
@@ -446,12 +493,15 @@ class JadxWrapper:
 
         return apis
 
-    def get_network_info(self) -> Dict[str, Any]:
+    def get_network_info(self, apk_path: Optional[str] = None) -> Dict[str, Any]:
         """
         分析网络通信信息
 
+        Args:
+            apk_path: APK 文件路径（可选）
+
         Returns:
-            网络信息，包含 URL、IP、端口等
+            网络信息
         """
         info = {
             "urls": [],
@@ -462,20 +512,12 @@ class JadxWrapper:
             "has_https": False
         }
 
-        # URL 正则
-        url_pattern = re.compile(
-            r'(https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s]*)?)'
-        )
+        url_pattern = re.compile(r'(https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s]*)?)')
+        ip_pattern = re.compile(r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b')
 
-        # IP 正则
-        ip_pattern = re.compile(
-            r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'
-        )
-
-        strings = self.get_strings()
+        strings = self.get_strings(apk_path)
 
         for s in strings:
-            # 检查 URL
             for match in url_pattern.findall(s):
                 if match not in info["urls"]:
                     info["urls"].append(match)
@@ -485,91 +527,73 @@ class JadxWrapper:
                     elif match.startswith("http://"):
                         info["has_http"] = True
 
-                    # 提取域名
                     from urllib.parse import urlparse
                     parsed = urlparse(match)
                     if parsed.netloc and parsed.netloc not in info["domains"]:
                         info["domains"].append(parsed.netloc)
 
-            # 检查 IP
             for match in ip_pattern.findall(s):
                 if match not in info["ips"]:
                     info["ips"].append(match)
 
         return info
 
-    def get_code_paths(self) -> List[str]:
+    def _call_tool(self, tool_name: str, params: Dict[str, Any]) -> Any:
         """
-        获取所有代码文件路径（用于规则匹配）
+        调用 MCP 工具
+
+        Args:
+            tool_name: 工具名称
+            params: 工具参数
 
         Returns:
-            代码文件路径列表
+            工具执行结果
         """
-        if not self._decompiled:
-            return []
+        # TODO: 实现 MCP 协议通信
+        # 这里先返回模拟数据或使用本地处理
+        return self._mock_response(tool_name, params)
 
-        paths = []
-        sources_dir = Path(self.output_dir) / "sources"
-        if not sources_dir.exists():
-            return paths
+    def _mock_response(self, tool_name: str, params: Dict[str, Any]) -> Any:
+        """模拟 MCP 响应（MCP 不可用时使用）"""
+        # 返回失败，让上层使用本地处理
+        return {"success": False, "error": "MCP not available"}
 
-        for java_file in sources_dir.rglob("*.java"):
-            # 转换为类似 jadx 的路径格式
-            rel_path = java_file.relative_to(sources_dir)
-            paths.append(str(rel_path).replace(".java", ""))
-
-        return paths
-
-    def _cleanup_output(self):
-        """清理反编译输出"""
-        if not self.keep_output and Path(self.output_dir).exists():
+    def close(self):
+        """关闭客户端，清理资源"""
+        if self._jadx_process:
             try:
-                shutil.rmtree(self.output_dir)
-            except Exception as e:
-                logger.warning(f"清理输出目录失败: {e}")
+                self._jadx_process.terminate()
+                self._jadx_process.wait(timeout=5)
+            except:
+                self._jadx_process.kill()
+            self._jadx_process = None
 
     def __del__(self):
-        """析构函数，清理临时文件"""
-        if not self.keep_output:
-            self._cleanup_output()
-
-
-# 兼容性别名
-JMCPClient = JadxWrapper
+        """析构函数"""
+        self.close()
 
 
 # 便捷函数
-def create_jadx_wrapper(
+def create_mcp_client(
+    server_url: str = "http://localhost:3000",
     jadx_path: Optional[str] = None,
-    output_dir: Optional[str] = None,
-    keep_output: bool = False
-) -> JadxWrapper:
+    auto_open: bool = True
+) -> JMCPClient:
     """
-    创建 JADX 封装器
+    创建 MCP 客户端
 
     Args:
+        server_url: MCP Server 地址
         jadx_path: jadx 可执行文件路径
-        output_dir: 反编译输出目录
-        keep_output: 是否保留反编译输出
+        auto_open: 是否自动打开 APK
 
     Returns:
-        JadxWrapper 实例
+        JMCPClient 实例
     """
-    return JadxWrapper(
+    client = JMCPClient(
+        server_url=server_url,
         jadx_path=jadx_path,
-        output_dir=output_dir,
-        keep_output=keep_output
+        auto_open=auto_open
     )
-
-
-def create_mcp_client(server_url: str = "http://localhost:3000") -> JadxWrapper:
-    """
-    创建 JADX 客户端（兼容旧 API）
-
-    Args:
-        server_url: 忽略此参数，仅为兼容性保留
-
-    Returns:
-        JadxWrapper 实例
-    """
-    return create_jadx_wrapper()
+    client.connect()
+    return client

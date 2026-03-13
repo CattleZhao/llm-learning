@@ -1,7 +1,7 @@
 """
 APK 恶意行为分析 Agent
 
-结合 jadx-cli 工具调用、恶意软件知识库和自我反思机制
+结合 JADX MCP 工具调用、恶意软件知识库和自我反思机制
 """
 import sys
 from pathlib import Path
@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from typing import Dict, List, Any, Optional
 from agents.base import BaseAgent, AgentResponse
-from tools.mcp.jadx_client import JadxWrapper
+from tools.mcp.jadx_client import JMCPClient
 from knowledge_base.malware_patterns import MalwareKnowledgeBase, get_knowledge_base
 from knowledge_base import get_rule_loader
 from reflection.checker import AnalysisReflection, create_reflection_checker, ReflectionResult
@@ -20,15 +20,14 @@ class APKAnalysisAgent(BaseAgent):
     """
     APK 恶意行为分析 Agent
 
-    使用 jadx-cli 进行 APK 反编译和分析，
+    使用 JADX MCP 进行 APK 反编译和分析，
     结合知识库和自我反思生成全面的安全报告
     """
 
     def __init__(
         self,
+        mcp_server_url: str = "http://localhost:3000",
         jadx_path: Optional[str] = None,
-        output_dir: Optional[str] = None,
-        keep_output: bool = False,
         enable_advanced_analysis: bool = False
     ):
         super().__init__(
@@ -39,12 +38,13 @@ class APKAnalysisAgent(BaseAgent):
             enable_reflection=True
         )
 
-        # 初始化 JADX 封装器
-        self.jadx = JadxWrapper(
+        # 初始化 MCP 客户端
+        self.mcp_client = JMCPClient(
+            server_url=mcp_server_url,
             jadx_path=jadx_path,
-            output_dir=output_dir,
-            keep_output=keep_output
+            auto_open=True
         )
+        self.mcp_client.connect()
 
         # 获取知识库
         self.knowledge_base = get_knowledge_base()
@@ -128,35 +128,35 @@ class APKAnalysisAgent(BaseAgent):
         Args:
             apk_path: APK 文件路径
         """
-        # 1. 反编译 APK
-        decompile_info = self.jadx.decompile_apk(apk_path)
-        self.current_analysis["decompile_info"] = decompile_info
+        # 1. 打开 APK（自动触发 JADX）
+        open_result = self.mcp_client.open_apk(apk_path)
+        self.current_analysis["open_result"] = open_result
 
         # 2. 获取 Manifest 信息
-        manifest = self.jadx.get_manifest()
+        manifest = self.mcp_client.get_manifest()
         self.current_analysis["manifest"] = manifest
 
         # 3. 权限分析
-        permissions = self.jadx.get_permissions()
+        permissions = self.mcp_client.get_permissions()
         self._analyze_permissions(permissions)
 
         # 4. 获取包路径（用于规则匹配）
-        code_paths = self.jadx.get_code_paths()
+        code_paths = self.mcp_client.get_code_paths()
         self.current_analysis["code_paths"] = code_paths
         self._match_package_rules(code_paths)
 
         # 5. 网络通信分析
-        network_info = self.jadx.get_network_info()
+        network_info = self.mcp_client.get_network_info()
         self.current_analysis["network_info"] = network_info
         self._analyze_network(network_info)
 
         # 6. API 调用分析
-        api_calls = self.jadx.get_apis()
+        api_calls = self.mcp_client.get_apis()
         self.current_analysis["api_calls"] = api_calls
         self._analyze_apis(api_calls)
 
         # 7. 字符串分析
-        strings = self.jadx.get_strings()
+        strings = self.mcp_client.get_strings()
         self.current_analysis["all_strings"] = strings
         self.current_analysis["suspicious_strings"] = []
         self._analyze_strings(strings)
@@ -389,6 +389,13 @@ class APKAnalysisAgent(BaseAgent):
         report.append(f"- 判定: {self.current_analysis.get('verdict', '')}")
         report.append("")
 
+        # 打开方式
+        open_result = self.current_analysis.get("open_result", {})
+        if open_result.get("method"):
+            report.append("## 处理方式")
+            report.append(f"- 使用: {open_result.get('method')}")
+            report.append("")
+
         # 权限分析
         if "permissions" in self.current_analysis:
             report.append("## 权限分析")
@@ -433,26 +440,23 @@ class APKAnalysisAgent(BaseAgent):
 
 # 便捷函数
 def create_apk_agent(
+    mcp_server_url: str = "http://localhost:3000",
     jadx_path: Optional[str] = None,
-    output_dir: Optional[str] = None,
-    keep_output: bool = False,
     enable_advanced: bool = False
 ) -> APKAnalysisAgent:
     """
     创建 APK 分析 Agent
 
     Args:
+        mcp_server_url: MCP Server 地址
         jadx_path: jadx 可执行文件路径
-        output_dir: 反编译输出目录
-        keep_output: 是否保留反编译输出
         enable_advanced: 是否启用高级分析
 
     Returns:
         APKAnalysisAgent 实例
     """
     return APKAnalysisAgent(
+        mcp_server_url=mcp_server_url,
         jadx_path=jadx_path,
-        output_dir=output_dir,
-        keep_output=keep_output,
         enable_advanced_analysis=enable_advanced
     )
