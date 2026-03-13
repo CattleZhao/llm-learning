@@ -1,7 +1,12 @@
 """
 APK 恶意行为分析 - Web UI
 
-基于 Streamlit 的简单分析界面
+完整流程:
+1. 选择 APK 文件
+2. 可选: RAG 检索
+3. JADX-GUI 打开 APK
+4. LLM 调用 JADX-MCP 分析
+5. 输出分析报告
 """
 import streamlit as st
 import sys
@@ -36,6 +41,12 @@ st.markdown("""
     background-color: #ff4b4f;
     color: white;
 }
+.status-box {
+    background: rgba(0,0,0,0.2);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin: 0.5rem 0;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -50,67 +61,93 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # 侧边栏 - 规则信息
+    # 初始化 session state
+    if "analysis_status" not in st.session_state:
+        st.session_state.analysis_status = []
+    if "analysis_result" not in st.session_state:
+        st.session_state.analysis_result = None
+
+    # 状态更新回调
+    def update_status(msg: str):
+        st.session_state.analysis_status.append(msg)
+        st.rerun()
+
+    # 侧边栏 - 配置
     with st.sidebar:
+        st.header("⚙️ 分析配置")
+
+        # RAG 检索选项
+        enable_rag = st.checkbox(
+            "启用 RAG 检索",
+            value=False,
+            help="在分析前检索相关恶意软件知识库"
+        )
+
+        # 高级分析选项
+        enable_advanced = st.checkbox(
+            "启用高级分析",
+            value=False,
+            help="使用更深入的分析模式"
+        )
+
+        # JADX 配置
+        st.markdown("---")
+        st.header("🔧 JADX 配置")
+
+        jadx_gui_path = st.text_input(
+            "JADX-GUI 路径",
+            value="",
+            placeholder="/path/to/jadx-gui",
+            help="留空自动查找"
+        )
+
+        mcp_server_path = st.text_input(
+            "MCP Server 路径",
+            value="",
+            placeholder="/path/to/jadx-mcp-server",
+            help="留空则不尝试启动 MCP Server"
+        )
+
+        st.markdown("---")
         st.header("📋 检测规则")
 
-        # 加载规则
         rule_loader = get_rule_loader()
-
         st.info(f"已加载 {len(rule_loader.rules)} 条规则")
 
         # 按类别显示
         categories = rule_loader.get_all_categories()
         if categories:
-            selected_cat = st.selectbox("规则类别", ["全部"] + categories)
+            with st.expander("查看规则"):
+                selected_cat = st.selectbox("规则类别", ["全部"] + categories, key="rule_category")
 
-            if selected_cat != "全部":
-                rules = rule_loader.get_rules_by_category(selected_cat)
-            else:
-                rules = rule_loader.rules
+                if selected_cat != "全部":
+                    rules = rule_loader.get_rules_by_category(selected_cat)
+                else:
+                    rules = rule_loader.rules
 
-            # 显示规则列表
-            st.markdown("**规则列表:**")
-            for rule in rules[:10]:  # 最多显示10条
-                severity_icons = {
-                    "critical": "🔴",
-                    "high": "🟠",
-                    "medium": "🟡",
-                    "low": "🟢"
-                }
-                icon = severity_icons.get(rule.severity, "⚪")
-                st.markdown(f"{icon} **{rule.name}**")
-                st.caption(rule.description)
-                if rule.patterns:
-                    with st.expander("查看模式"):
-                    for pattern in rule.patterns[:5]:
-                        st.code(pattern)
+                for rule in rules[:10]:
+                    severity_icons = {
+                        "critical": "🔴",
+                        "high": "🟠",
+                        "medium": "🟡",
+                        "low": "🟢"
+                    }
+                    icon = severity_icons.get(rule.severity, "⚪")
+                    st.markdown(f"{icon} **{rule.name}**")
+                    st.caption(rule.description)
 
-        st.markdown("---")
-
-        # 统计信息
-        st.header("📊 统计")
-
-        severity_counts = {}
-        for rule in rule_loader.rules:
-            severity_counts[rule.severity] = severity_counts.get(rule.severity, 0) + 1
-
-        for severity, count in sorted(severity_counts.items()):
-            color = {
-                "critical": "red",
-                "high": "orange",
-                "medium": "yellow",
-                "low": "green"
-            }.get(severity, "gray")
-            st.markdown(f":{color}: **{severity.upper()}**: {count} 条")
-
-    # 主区域 - 文件上传和分析
+    # 主区域
     st.markdown("---")
+
+    # 状态显示区域
+    if st.session_state.analysis_status:
+        st.header("📊 分析进度")
+        for status in st.session_state.analysis_status:
+            st.markdown(f"<div class='status-box'>{status}</div>", unsafe_allow_html=True)
 
     # 文件上传区域
     st.header("📁 选择 APK 文件")
 
-    # 上传方式选择
     upload_method = st.radio(
         "上传方式",
         ["上传文件", "输入路径"],
@@ -127,7 +164,6 @@ def main():
         )
 
         if uploaded_file is not None:
-            # 保存上传的文件
             upload_dir = Path("uploads")
             upload_dir.mkdir(exist_ok=True)
 
@@ -147,10 +183,22 @@ def main():
 
     # 分析按钮
     if apk_path:
-        if st.button("🔍 开始分析", type="primary", use_container_width=True):
-            with st.spinner("正在分析 APK..."):
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+            if st.button("🔍 开始分析", type="primary", use_container_width=True):
+                # 清空之前的状态
+                st.session_state.analysis_status = []
+                st.session_state.analysis_result = None
+
                 # 创建 Agent
-                agent = create_apk_agent()
+                agent = create_apk_agent(
+                    jadx_gui_path=jadx_gui_path if jadx_gui_path else None,
+                    mcp_server_path=mcp_server_path if mcp_server_path else None,
+                    enable_rag=enable_rag,
+                    enable_advanced=enable_advanced,
+                    on_status_update=update_status
+                )
 
                 # 执行分析
                 start_time = time.time()
@@ -163,62 +211,89 @@ def main():
 
                     elapsed_time = time.time() - start_time
 
-                    # 显示分析结果
-                    st.success(f"✅ 分析完成！(耗时: {elapsed_time:.2f} 秒)")
-
-                    # 显示报告
-                    st.markdown(response.content)
-
-                    # 显示元数据
-                    with st.expander("📊 分析元数据", expanded=False):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.metric("风险等级", response.metadata.get("risk_level", "unknown"))
-                        with col2:
-                            st.metric("发现数量", response.metadata.get("findings_count", 0))
-
-                        if response.metadata.get("risk_score"):
-                            st.caption(f"风险分数: {response.metadata['risk_score']}")
-                        if response.metadata.get("quality_score"):
-                            st.caption(f"质量评分: {response.metadata['quality_score']:.2f}")
+                    update_status(f"✅ 分析完成！(耗时: {elapsed_time:.2f} 秒)")
+                    st.session_state.analysis_result = response
 
                 except Exception as e:
-                    st.error(f"❌ 分析失败: {str(e)}")
-
-                    # 显示调试信息
+                    update_status(f"❌ 分析失败: {str(e)}")
                     with st.expander("查看错误详情"):
                         st.code(str(e), language="python")
 
+        with col2:
+            if st.button("🗑️ 清除", use_container_width=True):
+                st.session_state.analysis_status = []
+                st.session_state.analysis_result = None
+                st.rerun()
+
+    # 显示分析结果
+    if st.session_state.analysis_result:
+        st.markdown("---")
+        st.header("📋 分析报告")
+
+        response = st.session_state.analysis_result
+
+        # 显示报告
+        st.markdown(response.content)
+
+        # 显示元数据
+        with st.expander("📊 详细元数据", expanded=False):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("风险等级", response.metadata.get("risk_level", "unknown"))
+            with col2:
+                st.metric("发现数量", response.metadata.get("findings_count", 0))
+            with col3:
+                score = response.metadata.get("quality_score", 0)
+                st.metric("质量评分", f"{score * 100:.1f}%")
+
+            if response.metadata.get("risk_score"):
+                st.caption(f"风险分数: {response.metadata['risk_score']}")
+            if response.metadata.get("confidence"):
+                st.caption(f"置信度: {response.metadata['confidence'] * 100:.1f}%")
+
     # 使用说明
     st.markdown("---")
-    st.markdown("""
-    ### 📖 使用说明
+    with st.expander("📖 使用说明", expanded=False):
+        st.markdown("""
+        ### 完整分析流程
 
-    1. **选择 APK 文件**
-       - 上传 APK 文件，或
-       - 输入文件路径
+        1. **选择 APK 文件**
+           - 上传 APK 文件，或
+           - 输入文件路径
 
-    2. **开始分析**
-       - 点击 "开始分析" 按钮
-       - 等待分析完成
+        2. **配置选项（可选）**
+           - 启用 RAG 检索
+           - 启用高级分析
+           - 配置 JADX 路径
 
-    3. **查看报告**
-       - 风险等级判定
-       - 详细安全发现
-       - 分析质量评估
+        3. **开始分析**
+           - 点击 "开始分析" 按钮
+           - 观察实时进度
 
-    ### ⚙️ 技术架构
+        4. **查看报告**
+           - 风险等级判定
+           - 详细安全发现
+           - 分析质量评估
 
-    - **MCP 工具调用** - JADX 反编译
-    - **自定义规则** - 你的恶意特征
-    - **知识库检索** - 已知恶意模式
-    - **自我反思** - 分析完整性检查
+        ### 技术架构
 
-    ### 🔧 自定义规则
+        | 阶段 | 说明 |
+        |------|------|
+        | 1. JADX-GUI | 打开 APK 进行可视化 |
+        | 2. MCP 通信 | 通过 MCP 协议获取代码信息 |
+        | 3. 规则匹配 | 匹配自定义恶意特征 |
+        | 4. RAG 检索 | 查询恶意软件知识库 |
+        | 5. 报告生成 | 输出结构化分析报告 |
 
-    将你的恶意特征规则放到 `knowledge_base/raw/rules/` 目录，
-    系统会自动加载并用于分析检测。
-    """)
+        ### 自定义规则
+
+        将恶意特征规则放到 `knowledge_base/raw/rules/` 目录，
+        支持的格式:
+
+        - `package_rules.json` - 包路径规则
+        - `url_rules.json` - URL 黑名单
+        - `custom_rules.json` - 自定义规则
+        """)
 
 
 if __name__ == "__main__":

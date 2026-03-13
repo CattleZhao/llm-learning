@@ -62,6 +62,9 @@ class Settings:
     jadx_path: str = field(
         default_factory=lambda: os.getenv("JADX_PATH", "jadx")
     )
+    jadx_gui_path: Optional[str] = field(
+        default_factory=lambda: os.getenv("JADX_GUI_PATH")
+    )
     jadx_mcp_server_path: Optional[str] = field(
         default_factory=lambda: os.getenv("JADX_MCP_SERVER_PATH")
     )
