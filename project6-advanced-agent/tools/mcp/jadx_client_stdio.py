@@ -1,5 +1,7 @@
 """
 JADX MCP 客户端模块 (使用官方 MCP SDK)
+
+正确使用 stdio_client async context manager
 """
 import asyncio
 import re
@@ -48,20 +50,14 @@ class StdioMCPClient:
         jadx_gui_path: Optional[str] = None,
         on_status_update: Optional[Callable[[str], None]] = None
     ):
-        """
-        初始化 stdio MCP 客户端
-
-        Args:
-            server_command: 启动 MCP Server 的命令
-            jadx_gui_path: jadx-gui 可执行文件路径
-            on_status_update: 状态更新回调
-        """
         self.server_command = server_command
         self.jadx_gui_path = jadx_gui_path or self._find_jadx_gui()
         self.on_status_update = on_status_update or (lambda msg: None)
         self._current_apk: Optional[str] = None
-        self.session: Optional[ClientSession] = None
-        self._streams: Any = None
+        self._session: Optional[ClientSession] = None
+        self._stdio_context: Any = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._loop_thread: Optional[threading.Thread] = None
 
     def _find_jadx_gui(self) -> str:
         """查找 jadx-gui 可执行文件"""
@@ -87,45 +83,54 @@ class StdioMCPClient:
 
         return "jadx-gui.exe" if is_windows else "jadx-gui"
 
+    def _run_async(self, coro):
+        """在事件循环中运行异步代码"""
+        if self._loop and self._loop.is_running():
+            # 如果循环正在运行，创建任务
+            future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+            return future.result(timeout=60)
+        else:
+            # 如果没有循环，创建新的
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(coro)
+            finally:
+                loop.close()
+
     def start(self) -> bool:
         """启动 MCP Server 并创建会话"""
         self.on_status_update("启动 MCP Server...")
 
         try:
-            # 使用官方 SDK 的 stdio_client
-            server_params = StdioServerParameters(
-                command=self.server_command[0],
-                args=self.server_command[1:] if len(self.server_command) > 1 else []
+            # 创建事件循环线程
+            self._loop = asyncio.new_event_loop()
+            self._loop_thread = threading.Thread(
+                target=self._run_event_loop,
+                daemon=True
             )
+            self._loop_thread.start()
 
-            # 创建 stdio 客户端
-            self._streams, self._streams_cleanup = stdio_client(server_params)
-
-            # 在新的事件循环中创建会话并初始化
+            # 在事件循环中初始化会话
             def init_session():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    session = ClientSession(self._streams)
-                    loop.run_until_complete(session.initialize())
-                    return session, loop
-                finally:
-                    loop.run_until_complete(asyncio.sleep(0.1))
+                server_params = StdioServerParameters(
+                    command=self.server_command[0],
+                    args=self.server_command[1:] if len(self.server_command) > 1 else []
+                )
 
-            # 在后台线程中初始化
-            result = [None, None]
-            def run_init():
-                result[0], result[1] = init_session()
+                async def create():
+                    self._stdio_context = stdio_client(server_params)
+                    streams = await self._stdio_context.__aenter__()
+                    self._session = ClientSession(streams)
+                    await self._session.initialize()
+                    return True
 
-            thread = threading.Thread(target=run_init, daemon=True)
-            thread.start()
-            thread.join(timeout=15)
+                future = asyncio.run_coroutine_threadsafe(
+                    create(),
+                    self._loop
+                )
+                return future.result(timeout=30)
 
-            if result[0] is None:
-                self.on_status_update("❌ MCP Server 启动超时")
-                return False
-
-            self.session = result[0]
+            init_session()
             self.on_status_update("✅ MCP Server 已连接")
             return True
 
@@ -134,82 +139,71 @@ class StdioMCPClient:
             logger.error(f"启动失败: {e}", exc_info=True)
             return False
 
+    def _run_event_loop(self):
+        """在后台线程中运行事件循环"""
+        asyncio.set_event_loop(self._loop)
+        self._loop.run_forever()
+
     def connect(self) -> bool:
         """连接到 MCP Server"""
         return self.start()
 
-    async def _call_tool_async(self, tool_name: str, params: Dict[str, Any]) -> Any:
-        """异步调用工具"""
-        if not self.session:
-            return None
-        result = await self.session.call_tool(tool_name, params)
-        return result
-
     def call_tool(self, tool_name: str, params: Dict[str, Any]) -> Any:
         """调用 MCP 工具（同步包装）"""
-        if not self.session:
+        if not self._session:
             return None
 
+        async def _call():
+            result = await self._session.call_tool(tool_name, params)
+            return result
+
         try:
-            # 在新的事件循环中运行异步调用
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                result = loop.run_until_complete(
-                    self.session.call_tool(tool_name, params)
-                )
-                return result
-            finally:
-                loop.close()
+            return self._run_async(_call())
         except Exception as e:
             logger.error(f"工具调用失败 {tool_name}: {e}")
             return None
 
-    async def _list_tools_async(self) -> List[Dict[str, Any]]:
-        """异步列出工具"""
-        if not self.session:
-            return []
-        tools_result = await self.session.list_tools()
-        return tools_result.tools
-
     def list_tools(self) -> List[Dict[str, Any]]:
         """获取可用的工具列表（同步包装）"""
-        if not self.session:
+        if not self._session:
             return []
 
+        async def _list():
+            tools_result = await self._session.list_tools()
+            # 转换为字典列表，包含参数信息
+            result = []
+            for tool in tools_result.tools:
+                result.append({
+                    "name": tool.name,
+                    "description": tool.description,
+                    "inputSchema": tool.inputSchema
+                })
+            return result
+
         try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                tools_result = loop.run_until_complete(self.session.list_tools())
-                # 转换 Tool 对象为字典
-                return [{"name": t.name, "description": t.description} for t in tools_result.tools]
-            finally:
-                loop.close()
+            return self._run_async(_list())
         except Exception as e:
             logger.error(f"列出工具失败: {e}")
             return []
 
     def close(self):
         """关闭 MCP Server"""
-        if self.session:
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(self.session.close())
-                finally:
-                    loop.close()
-            except:
-                pass
-            self.session = None
+        if self._session:
+            async def _close():
+                await self._session.close()
+                if self._stdio_context:
+                    await self._stdio_context.__aexit__(None, None, None)
 
-        if self._streams_cleanup:
             try:
-                self._streams_cleanup()
+                self._run_async(_close())
             except:
                 pass
-            self._streams_cleanup = None
+            self._session = None
+            self._stdio_context = None
+
+        if self._loop:
+            self._loop.call_soon_threadsafe(self._loop.stop)
+            self._loop = None
 
     # ============ JMCPClient 兼容接口 ============
 
@@ -261,8 +255,8 @@ class StdioMCPClient:
     def get_manifest(self) -> Dict[str, Any]:
         """获取 AndroidManifest.xml 内容"""
         result = self.call_tool("get_android_manifest", {})
+
         if result and isinstance(result, list) and len(result) > 0:
-            # MCP SDK 返回的是列表，取第一个元素
             result = result[0]
 
         if result and isinstance(result, dict):
