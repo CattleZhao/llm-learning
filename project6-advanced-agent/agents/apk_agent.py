@@ -3,7 +3,7 @@ APK 恶意行为分析 Agent
 
 完整流程:
 1. JADX-GUI 打开 APK
-2. LLM 调用 JADX-MCP 进行分析
+2. 通过 MCP 协议进行分析
 3. 输出分析报告
 """
 import sys
@@ -16,7 +16,6 @@ from tools.mcp.jadx_client import JMCPClient
 from knowledge_base.malware_patterns import MalwareKnowledgeBase, get_knowledge_base
 from knowledge_base import get_rule_loader
 from reflection.checker import AnalysisReflection, create_reflection_checker, ReflectionResult
-from config import get_settings
 
 
 class APKAnalysisAgent(BaseAgent):
@@ -33,10 +32,7 @@ class APKAnalysisAgent(BaseAgent):
     def __init__(
         self,
         mcp_server_url: str = "http://localhost:3000",
-        jadx_port: int = 8652,
-        jadx_path: Optional[str] = None,
         jadx_gui_path: Optional[str] = None,
-        mcp_server_path: Optional[str] = None,
         enable_rag: bool = False,
         enable_advanced_analysis: bool = False,
         on_status_update: Optional[Callable[[str], None]] = None
@@ -52,13 +48,10 @@ class APKAnalysisAgent(BaseAgent):
         self.on_status_update = on_status_update or (lambda msg: None)
         self.enable_rag = enable_rag
 
-        # 初始化 MCP 客户端（带状态回调）
+        # 初始化 MCP 客户端
         self.mcp_client = JMCPClient(
             server_url=mcp_server_url,
-            jadx_port=jadx_port,
-            jadx_path=jadx_path,
             jadx_gui_path=jadx_gui_path,
-            mcp_server_path=mcp_server_path,
             on_status_update=self.on_status_update
         )
         self.mcp_client.connect()
@@ -78,17 +71,7 @@ class APKAnalysisAgent(BaseAgent):
         input_text: str,
         context: Optional[Dict] = None
     ) -> AgentResponse:
-        """
-        执行 APK 分析
-
-        Args:
-            input_text: 用户输入（APK 文件路径或分析请求）
-            context: 额外上下文
-
-        Returns:
-            AgentResponse 对象
-        """
-        # 解析用户输入
+        """执行 APK 分析"""
         apk_path = self._extract_apk_path(input_text, context)
 
         if not apk_path:
@@ -97,62 +80,40 @@ class APKAnalysisAgent(BaseAgent):
                 metadata={"error": "no_apk_path"}
             )
 
-        # 检查文件是否存在
         if not Path(apk_path).exists():
             return AgentResponse(
                 content=f"APK 文件不存在: {apk_path}",
-                metadata={"error": "file_not_found", "apk_path": apk_path}
+                metadata={"error": "file_not_found"}
             )
 
-        # 执行分析
         try:
             self._analyze_apk(apk_path)
             return self._generate_response()
         except Exception as e:
             import traceback
             return AgentResponse(
-                content=f"分析过程中出错: {str(e)}\n\n```\n{traceback.format_exc()}\n```",
+                content=f"分析过程中出错: {str(e)}",
                 metadata={"error": str(e)}
             )
 
-    def _extract_apk_path(
-        self,
-        input_text: str,
-        context: Optional[Dict]
-    ) -> Optional[str]:
+    def _extract_apk_path(self, input_text: str, context: Optional[Dict]) -> Optional[str]:
         """从输入中提取 APK 路径"""
         if context and "apk_path" in context:
             return context["apk_path"]
-
         if input_text.endswith(".apk"):
             return input_text
-
         if "分析" in input_text:
             parts = input_text.split()
             for part in parts:
                 if part.endswith(".apk"):
                     return part
-
         return None
 
     def _analyze_apk(self, apk_path: str):
-        """
-        执行完整的 APK 分析
-
-        流程:
-        1. 在 JADX-GUI 中打开 APK
-        2. 获取 Manifest 信息
-        3. 分析权限
-        4. 获取代码路径并匹配规则
-        5. 分析网络通信
-        6. 分析 API 调用
-        7. 提取字符串
-        8. 匹配恶意模式
-        9. 计算风险等级
-        """
+        """执行完整的 APK 分析（9步）"""
         # 1. 在 JADX-GUI 中打开 APK
         self.on_status_update("📱 步骤 1/9: 在 JADX-GUI 中打开 APK...")
-        open_result = self.mcp_client.open_apk_in_jadx_gui(apk_path)
+        open_result = self.mcp_client.open_apk(apk_path)
         self.current_analysis["open_result"] = open_result
 
         # 2. 获取 Manifest 信息
@@ -205,7 +166,6 @@ class APKAnalysisAgent(BaseAgent):
     def _analyze_permissions(self, permissions: Dict[str, Any]):
         """分析权限"""
         self.current_analysis["permissions"] = permissions
-
         dangerous = permissions.get("dangerous", [])
         dangerous_count = len(dangerous)
 
@@ -221,7 +181,6 @@ class APKAnalysisAgent(BaseAgent):
     def _match_package_rules(self, code_paths: List[str]):
         """使用自定义规则匹配包路径"""
         matched_rules = []
-
         for path in code_paths:
             java_path = path.replace(".java", "")
             rules = self.rule_loader.match_rules(java_path)
@@ -246,7 +205,6 @@ class APKAnalysisAgent(BaseAgent):
         """分析网络通信"""
         urls = network_info.get("urls", [])
 
-        # 匹配 URL 规则
         for url in urls:
             rules = self.rule_loader.match_url_rules(url)
             for rule in rules:
@@ -257,7 +215,6 @@ class APKAnalysisAgent(BaseAgent):
                     "evidence": {"url": url, "rule": rule.name}
                 })
 
-        # 检查 HTTPS
         if network_info.get("has_http") and not network_info.get("has_https"):
             self.current_analysis.setdefault("findings", []).append({
                 "category": "network",
@@ -266,7 +223,6 @@ class APKAnalysisAgent(BaseAgent):
                 "evidence": urls
             })
 
-        # 检查硬编码 IP
         ips = network_info.get("ips", [])
         if ips:
             external_ips = [
@@ -401,26 +357,18 @@ class APKAnalysisAgent(BaseAgent):
         """格式化分析报告"""
         report = ["# APK 安全分析报告\n"]
 
-        # 基本信息
         manifest = self.current_analysis.get("manifest", {})
         report.append("## 基本信息")
         report.append(f"- 包名: `{manifest.get('package', 'unknown')}`")
         report.append(f"- 版本: `{manifest.get('version_name', 'unknown')}`")
 
-        # 风险等级
         risk_level = self.current_analysis.get("risk_level", "unknown").upper()
-        risk_icons = {
-            "LOW": "🟢",
-            "MEDIUM": "🟡",
-            "HIGH": "🟠",
-            "CRITICAL": "🔴"
-        }
+        risk_icons = {"LOW": "🟢", "MEDIUM": "🟡", "HIGH": "🟠", "CRITICAL": "🔴"}
         icon = risk_icons.get(risk_level, "⚪")
         report.append(f"- 风险等级: {icon} {risk_level}")
         report.append(f"- 判定: {self.current_analysis.get('verdict', '')}")
         report.append("")
 
-        # 权限分析
         if "permissions" in self.current_analysis:
             report.append("## 权限分析")
             perms = self.current_analysis["permissions"]
@@ -432,7 +380,6 @@ class APKAnalysisAgent(BaseAgent):
                     report.append(f"  - `{p}`")
             report.append("")
 
-        # 发现
         findings = self.current_analysis.get("findings", [])
         if findings:
             report.append("## 安全发现")
@@ -440,19 +387,8 @@ class APKAnalysisAgent(BaseAgent):
                 severity_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
                 icon = severity_icon.get(finding.get("severity", ""), "⚪")
                 report.append(f"{i}. {icon} **[{finding.get('severity', '').upper()}]** {finding['description']}")
-
-                evidence = finding.get("evidence")
-                if evidence and isinstance(evidence, dict):
-                    if "rule" in evidence:
-                        report.append(f"   - 规则: `{evidence['rule']}`")
-                    if "url" in evidence:
-                        report.append(f"   - URL: `{evidence['url']}`")
-                elif evidence and isinstance(evidence, list) and len(evidence) > 0:
-                    if isinstance(evidence[0], str):
-                        report.append(f"   - 示例: `{evidence[0]}`")
             report.append("")
 
-        # 分析质量
         report.append("## 分析质量")
         report.append(f"- 覆盖率: {reflection.confidence * 100:.1f}%")
         report.append(f"- 置信度: {reflection.confidence * 100:.1f}%")
@@ -464,10 +400,7 @@ class APKAnalysisAgent(BaseAgent):
 # 便捷函数
 def create_apk_agent(
     mcp_server_url: str = "http://localhost:3000",
-    jadx_port: int = 8652,
-    jadx_path: Optional[str] = None,
     jadx_gui_path: Optional[str] = None,
-    mcp_server_path: Optional[str] = None,
     enable_rag: bool = False,
     enable_advanced: bool = False,
     on_status_update: Optional[Callable[[str], None]] = None
@@ -477,10 +410,7 @@ def create_apk_agent(
 
     Args:
         mcp_server_url: MCP Server 地址
-        jadx_port: JADX 端口
-        jadx_path: jadx 可执行文件路径
         jadx_gui_path: jadx-gui 可执行文件路径
-        mcp_server_path: JADX MCP Server 路径
         enable_rag: 是否启用 RAG 检索
         enable_advanced: 是否启用高级分析
         on_status_update: 状态更新回调
@@ -490,10 +420,7 @@ def create_apk_agent(
     """
     return APKAnalysisAgent(
         mcp_server_url=mcp_server_url,
-        jadx_port=jadx_port,
-        jadx_path=jadx_path,
         jadx_gui_path=jadx_gui_path,
-        mcp_server_path=mcp_server_path,
         enable_rag=enable_rag,
         enable_advanced_analysis=enable_advanced,
         on_status_update=on_status_update

@@ -97,15 +97,15 @@ def main():
         jadx_gui_path = st.text_input(
             "JADX-GUI 路径",
             value="",
-            placeholder="/path/to/jadx-gui",
-            help="留空自动查找"
+            placeholder="jadx-gui 或 /path/to/jadx-gui",
+            help="留空自动查找系统中的 jadx-gui"
         )
 
-        mcp_server_path = st.text_input(
-            "MCP Server 路径",
-            value="",
-            placeholder="/path/to/jadx-mcp-server",
-            help="留空则不尝试启动 MCP Server"
+        mcp_server_url = st.text_input(
+            "MCP Server 地址",
+            value="http://localhost:3000",
+            placeholder="http://localhost:3000",
+            help="JADX MCP Server 的 HTTP 地址"
         )
 
         st.markdown("---")
@@ -193,8 +193,8 @@ def main():
 
                 # 创建 Agent
                 agent = create_apk_agent(
+                    mcp_server_url=mcp_server_url,
                     jadx_gui_path=jadx_gui_path if jadx_gui_path else None,
-                    mcp_server_path=mcp_server_path if mcp_server_path else None,
                     enable_rag=enable_rag,
                     enable_advanced=enable_advanced,
                     on_status_update=update_status
