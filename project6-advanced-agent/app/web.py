@@ -17,6 +17,7 @@ import time
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from agents.apk_agent import create_apk_agent
+from agents.apk_agent_llm import create_llm_agent
 from knowledge_base import get_rule_loader
 
 # 页面配置
@@ -67,9 +68,17 @@ def main():
     if "analysis_status" not in st.session_state:
         st.session_state.analysis_status = []
 
-    # 状态更新回调（仅记录，不触发 rerun）
+    # 状态更新回调（记录并触发显示更新）
     def update_status(msg: str):
-        st.session_state.analysis_status.append(msg)
+        import time
+        timestamp = time.strftime("%H:%M:%S")
+        st.session_state.analysis_status.append(f"[{timestamp}] {msg}")
+        # 触发进度显示更新（如果状态容器存在）
+        if hasattr(st.session_state, 'progress_container'):
+            with st.session_state.progress_container.container():
+                st.header("📊 分析进度")
+                for status in st.session_state.analysis_status:
+                    st.markdown(f"<div class='status-box'>{status}</div>", unsafe_allow_html=True)
 
     # 侧边栏 - 配置
     with st.sidebar:
@@ -80,6 +89,14 @@ def main():
             "启用 RAG 检索",
             value=False,
             help="在分析前检索相关恶意软件知识库"
+        )
+
+        # Agent 类型选择
+        agent_type = st.radio(
+            "Agent 类型",
+            ["硬编码流程", "LLM 驱动"],
+            horizontal=True,
+            help="硬编码流程: 固定分析步骤 | LLM 驱动: AI 自主决定调用哪些工具"
         )
 
         # 高级分析选项
@@ -156,11 +173,23 @@ def main():
     # 主区域
     st.markdown("---")
 
-    # 状态显示区域（分析完成后显示）
+    # 实时状态显示区域（分析时实时更新）
+    if "progress_container" not in st.session_state:
+        st.session_state.progress_container = st.empty()
+
+    # 更新进度显示的函数
+    def update_progress_display():
+        if st.session_state.analysis_status:
+            with st.session_state.progress_container.container():
+                st.header("📊 分析进度")
+                for status in st.session_state.analysis_status:
+                    st.markdown(f"<div class='status-box'>{status}</div>", unsafe_allow_html=True)
+
+    # 显示现有进度
+    update_progress_display()
+
+    # 如果分析完成，显示分隔线
     if st.session_state.analysis_status and st.session_state.analysis_result:
-        st.header("📊 分析进度")
-        for status in st.session_state.analysis_status:
-            st.markdown(f"<div class='status-box'>{status}</div>", unsafe_allow_html=True)
         st.markdown("---")
 
     # 文件上传区域
@@ -210,14 +239,22 @@ def main():
                 st.session_state.analysis_result = None
 
                 with st.spinner("正在分析 APK..."):
-                    # 创建 Agent
-                    agent = create_apk_agent(
-                        mcp_server_path=mcp_server_path,
-                        jadx_gui_path=jadx_gui_path if jadx_gui_path else None,
-                        enable_rag=enable_rag,
-                        enable_advanced=enable_advanced,
-                        on_status_update=update_status
-                    )
+                    # 创建 Agent - 根据用户选择
+                    if agent_type == "LLM 驱动":
+                        agent = create_llm_agent(
+                            mcp_server_path=mcp_server_path,
+                            on_status_update=update_status
+                        )
+                        update_status("🤖 使用 LLM 驱动 Agent")
+                    else:
+                        agent = create_apk_agent(
+                            mcp_server_path=mcp_server_path,
+                            jadx_gui_path=jadx_gui_path if jadx_gui_path else None,
+                            enable_rag=enable_rag,
+                            enable_advanced=enable_advanced,
+                            on_status_update=update_status
+                        )
+                        update_status("⚙️ 使用硬编码流程 Agent")
 
                     # 执行分析
                     start_time = time.time()
