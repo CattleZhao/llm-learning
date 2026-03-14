@@ -56,6 +56,16 @@ class ToolDefinitions:
             ToolDefinitions.jadx_search_classes(),
             ToolDefinitions.jadx_get_class_source(),
             ToolDefinitions.match_malware_rules(),
+            # 新增工具
+            ToolDefinitions.jadx_get_main_activity(),
+            ToolDefinitions.jadx_get_application_classes(),
+            ToolDefinitions.jadx_get_resource_files(),
+            ToolDefinitions.jadx_get_resource_file(),
+            ToolDefinitions.jadx_get_methods_of_class(),
+            ToolDefinitions.jadx_get_fields_of_class(),
+            ToolDefinitions.jadx_get_smali_of_class(),
+            ToolDefinitions.jadx_get_xrefs_to_class(),
+            ToolDefinitions.jadx_get_xrefs_to_method(),
         ]
 
     @staticmethod
@@ -227,6 +237,188 @@ class ToolDefinitions:
                     }
                 },
                 "required": ["code_paths"]
+            }
+        }
+
+    @staticmethod
+    def jadx_get_main_activity() -> Dict[str, Any]:
+        """获取主 Activity"""
+        return {
+            "name": "jadx_get_main_activity",
+            "description": "获取 APK 的主 Activity 类，这是应用的入口点，分析启动行为很有用。",
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+
+    @staticmethod
+    def jadx_get_application_classes() -> Dict[str, Any]:
+        """获取应用类列表"""
+        return {
+            "name": "jadx_get_application_classes",
+            "description": "获取应用的 Application 类列表，用于分析应用初始化逻辑。",
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+
+    @staticmethod
+    def jadx_get_resource_files() -> Dict[str, Any]:
+        """获取资源文件列表"""
+        return {
+            "name": "jadx_get_resource_files",
+            "description": "获取 APK 中所有资源文件的名称列表，可用于分析可疑资源文件。",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "offset": {
+                        "type": "integer",
+                        "description": "分页偏移量",
+                        "default": 0
+                    },
+                    "count": {
+                        "type": "integer",
+                        "description": "返回数量，0 表示全部",
+                        "default": 0
+                    }
+                },
+                "required": []
+            }
+        }
+
+    @staticmethod
+    def jadx_get_resource_file() -> Dict[str, Any]:
+        """获取资源文件内容"""
+        return {
+            "name": "jadx_get_resource_file",
+            "description": "获取指定资源文件的内容，用于检查可疑的配置或数据文件。",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "resource_name": {
+                        "type": "string",
+                        "description": "资源文件名称"
+                    }
+                },
+                "required": ["resource_name"]
+            }
+        }
+
+    @staticmethod
+    def jadx_get_methods_of_class() -> Dict[str, Any]:
+        """获取类的方法列表"""
+        return {
+            "name": "jadx_get_methods_of_class",
+            "description": "获取指定类中所有方法的列表，用于分析类的功能和行为。",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "class_name": {
+                        "type": "string",
+                        "description": "类的完整名称"
+                    }
+                },
+                "required": ["class_name"]
+            }
+        }
+
+    @staticmethod
+    def jadx_get_fields_of_class() -> Dict[str, Any]:
+        """获取类的字段列表"""
+        return {
+            "name": "jadx_get_fields_of_class",
+            "description": "获取指定类中所有字段的列表，用于分析类的数据结构。",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "class_name": {
+                        "type": "string",
+                        "description": "类的完整名称"
+                    }
+                },
+                "required": ["class_name"]
+            }
+        }
+
+    @staticmethod
+    def jadx_get_smali_of_class() -> Dict[str, Any]:
+        """获取类的 Smali 代码"""
+        return {
+            "name": "jadx_get_smali_of_class",
+            "description": "获取指定类的 Smali 代码，比源代码更底层，可检测混淆和隐藏行为。",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "class_name": {
+                        "type": "string",
+                        "description": "类的完整名称"
+                    }
+                },
+                "required": ["class_name"]
+            }
+        }
+
+    @staticmethod
+    def jadx_get_xrefs_to_class() -> Dict[str, Any]:
+        """获取类的引用"""
+        return {
+            "name": "jadx_get_xrefs_to_class",
+            "description": "查找指定类被哪些其他类引用，用于追踪代码调用关系和数据流。",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "class_name": {
+                        "type": "string",
+                        "description": "类的完整名称"
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "分页偏移量",
+                        "default": 0
+                    },
+                    "count": {
+                        "type": "integer",
+                        "description": "返回数量",
+                        "default": 0
+                    }
+                },
+                "required": ["class_name"]
+            }
+        }
+
+    @staticmethod
+    def jadx_get_xrefs_to_method() -> Dict[str, Any]:
+        """获取方法的引用"""
+        return {
+            "name": "jadx_get_xrefs_to_method",
+            "description": "查找指定方法被哪些地方调用，用于追踪敏感方法的调用路径。",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "class_name": {
+                        "type": "string",
+                        "description": "方法所在类的完整名称"
+                    },
+                    "method_name": {
+                        "type": "string",
+                        "description": "方法名称"
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "分页偏移量",
+                        "default": 0
+                    },
+                    "count": {
+                        "type": "integer",
+                        "description": "返回数量",
+                        "default": 0
+                    }
+                },
+                "required": ["class_name", "method_name"]
             }
         }
 
@@ -538,6 +730,67 @@ class LLMAPKAnalysisAgent(BaseAgent):
                     ]
                 }
 
+            # 新增工具执行
+            elif tool_name == "jadx_get_main_activity":
+                return self.mcp_client.call_tool("get_main_activity_class", {})
+
+            elif tool_name == "jadx_get_application_classes":
+                return self.mcp_client.call_tool("get_main_application_classes_names", {})
+
+            elif tool_name == "jadx_get_resource_files":
+                offset = tool_input.get("offset", 0)
+                count = tool_input.get("count", 0)
+                return self.mcp_client.call_tool("get_all_resource_file_names", {
+                    "offset": offset,
+                    "count": count
+                })
+
+            elif tool_name == "jadx_get_resource_file":
+                resource_name = tool_input["resource_name"]
+                return self.mcp_client.call_tool("get_resource_file", {
+                    "resource_name": resource_name
+                })
+
+            elif tool_name == "jadx_get_methods_of_class":
+                class_name = tool_input["class_name"]
+                return self.mcp_client.call_tool("get_methods_of_class", {
+                    "class_name": class_name
+                })
+
+            elif tool_name == "jadx_get_fields_of_class":
+                class_name = tool_input["class_name"]
+                return self.mcp_client.call_tool("get_fields_of_class", {
+                    "class_name": class_name
+                })
+
+            elif tool_name == "jadx_get_smali_of_class":
+                class_name = tool_input["class_name"]
+                return self.mcp_client.call_tool("get_smali_of_class", {
+                    "class_name": class_name
+                })
+
+            elif tool_name == "jadx_get_xrefs_to_class":
+                class_name = tool_input["class_name"]
+                offset = tool_input.get("offset", 0)
+                count = tool_input.get("count", 0)
+                return self.mcp_client.call_tool("get_xrefs_to_class", {
+                    "class_name": class_name,
+                    "offset": offset,
+                    "count": count
+                })
+
+            elif tool_name == "jadx_get_xrefs_to_method":
+                class_name = tool_input["class_name"]
+                method_name = tool_input["method_name"]
+                offset = tool_input.get("offset", 0)
+                count = tool_input.get("count", 0)
+                return self.mcp_client.call_tool("get_xrefs_to_method", {
+                    "class_name": class_name,
+                    "method_name": method_name,
+                    "offset": offset,
+                    "count": count
+                })
+
             else:
                 return {"error": f"未知工具: {tool_name}"}
 
@@ -557,7 +810,17 @@ class LLMAPKAnalysisAgent(BaseAgent):
             "jadx_get_apis": "分析 API 调用",
             "jadx_search_classes": "搜索类",
             "jadx_get_class_source": "获取类源码",
-            "match_malware_rules": "匹配恶意规则"
+            "match_malware_rules": "匹配恶意规则",
+            # 新增工具
+            "jadx_get_main_activity": "获取主 Activity",
+            "jadx_get_application_classes": "获取应用类列表",
+            "jadx_get_resource_files": "获取资源文件列表",
+            "jadx_get_resource_file": "获取资源文件内容",
+            "jadx_get_methods_of_class": "获取类方法列表",
+            "jadx_get_fields_of_class": "获取类字段列表",
+            "jadx_get_smali_of_class": "获取 Smali 代码",
+            "jadx_get_xrefs_to_class": "获取类引用",
+            "jadx_get_xrefs_to_method": "获取方法引用"
         }
         return display_names.get(tool_name, tool_name)
 
@@ -576,7 +839,17 @@ class LLMAPKAnalysisAgent(BaseAgent):
             "jadx_get_apis": lambda r: f"发现 {len(r) if isinstance(r, list) else 0} 个 API 调用",
             "jadx_search_classes": lambda r: f"找到 {len(r.get('classes', [])) if isinstance(r, dict) else 0} 个类",
             "jadx_get_class_source": lambda r: f"源码长度: {len(r.get('source', '')) if isinstance(r, dict) else 0} 字符",
-            "match_malware_rules": lambda r: f"匹配 {r.get('total_matched', 0)} 条恶意规则"
+            "match_malware_rules": lambda r: f"匹配 {r.get('total_matched', 0)} 条恶意规则",
+            # 新增工具摘要
+            "jadx_get_main_activity": lambda r: f"主 Activity: {r.get('class_name', 'unknown') if isinstance(r, dict) else 'unknown'}",
+            "jadx_get_application_classes": lambda r: f"{len(r) if isinstance(r, list) else 0} 个应用类",
+            "jadx_get_resource_files": lambda r: f"{len(r) if isinstance(r, list) else 0} 个资源文件",
+            "jadx_get_resource_file": lambda r: f"获取资源: {r.get('resource_name', 'unknown') if isinstance(r, dict) else 'unknown'}",
+            "jadx_get_methods_of_class": lambda r: f"{len(r.get('methods', [])) if isinstance(r, dict) else 0} 个方法",
+            "jadx_get_fields_of_class": lambda r: f"{len(r.get('fields', [])) if isinstance(r, dict) else 0} 个字段",
+            "jadx_get_smali_of_class": lambda r: f"Smali 长度: {len(r.get('smali', '')) if isinstance(r, dict) else 0} 字符",
+            "jadx_get_xrefs_to_class": lambda r: f"{len(r.get('xrefs', [])) if isinstance(r, dict) else 0} 个引用",
+            "jadx_get_xrefs_to_method": lambda r: f"{len(r.get('xrefs', [])) if isinstance(r, dict) else 0} 个调用"
         }
 
         formatter = summaries.get(tool_name)
