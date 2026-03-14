@@ -27,26 +27,82 @@ st.set_page_config(
     layout="wide"
 )
 
-# 自定义 CSS
+# 自定义 CSS - 浅色主题
 st.markdown("""
 <style>
+/* 页面背景 - 浅色渐变 */
 .stApp {
-    background: linear-gradient(135deg, #1e3a8a 0%, #2d5a87 100%);
+    background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
 }
+
+/* 主标题区域 */
 .main-header {
     text-align: center;
-    color: white;
+    color: #1e293b;
     padding: 2rem 0;
+    background: white;
+    border-radius: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
+
+.main-header h1 {
+    color: #0f172a;
+    margin-bottom: 0.5rem;
+}
+
+.main-header p {
+    color: #64748b;
+    font-size: 1.1rem;
+}
+
+/* 按钮样式 */
 .stButton>k {
-    background-color: #ff4b4f;
+    background-color: #3b82f6;
     color: white;
+    border-radius: 0.5rem;
+    font-weight: 500;
 }
+
+.stButton>k:hover {
+    background-color: #2563eb;
+}
+
+/* 状态框 - 清晰可读 */
 .status-box {
-    background: rgba(0,0,0,0.2);
-    padding: 1rem;
+    background: white;
+    padding: 0.75rem 1rem;
     border-radius: 0.5rem;
     margin: 0.5rem 0;
+    border-left: 4px solid #3b82f6;
+    color: #1e293b;
+    font-size: 0.95rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* 侧边栏样式 */
+.css-1d391kg {
+    background-color: #f8fafc;
+}
+
+.css-1d391kg .css-1v0mbdj {
+    color: #1e293b;
+}
+
+/* 标题颜色 */
+h1, h2, h3 {
+    color: #0f172a !important;
+}
+
+/* 文本颜色 */
+.stMarkdown {
+    color: #334155;
+}
+
+/* 代码块样式 */
+.stCode {
+    background: #f1f5f9;
+    border-radius: 0.5rem;
 }
 </style>
 """, unsafe_allow_html=True)
