@@ -1,5 +1,37 @@
-streamlit
-anthropic
-python-dotenv
-weasyprint
-markdown
+# Project 6: 高级 Agent 应用
+
+# 核心依赖
+anthropic>=0.40.0
+python-dotenv>=1.0.0
+
+# LangChain 核心组件
+langchain>=0.3.0
+langchain-anthropic>=0.3.0
+langchain-core>=0.3.0
+langchain-community>=0.3.0
+
+# 记忆存储
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+redis>=5.0.0
+
+# 工具和实用
+requests>=2.31.0
+httpx>=0.27.0
+pyyaml>=6.0.0
+
+# Web UI
+streamlit>=1.28.0
+
+# PDF 生成（新增）
+weasyprint>=60.0
+markdown>=3.6
+
+# 评估和测试
+pytest>=8.0.0
+pytest-asyncio>=0.24.0
+
+# 开发工具
+black>=24.0.0
+isort>=5.13.0
+mypy>=1.8.0
