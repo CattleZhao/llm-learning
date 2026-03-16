@@ -370,6 +370,12 @@ def main():
 
                         update_status(f"✅ 分析完成！(耗时: {elapsed_time:.2f} 秒)")
                         st.session_state.analysis_result = response
+
+                        # 调试：显示返回信息
+                        update_status(f"📄 报告内容长度: {len(response.content) if response.content else 0}")
+                        if hasattr(response, 'metadata'):
+                            update_status(f"📊 风险等级: {response.metadata.get('risk_level', 'unknown')}")
+
                         st.rerun()
 
                     except Exception as e:
@@ -392,8 +398,16 @@ def main():
 
         response = st.session_state.analysis_result
 
-        # 显示报告
-        st.markdown(response.content)
+        # 调试信息
+        if not response.content:
+            st.warning("⚠️ 报告内容为空")
+            st.json(response.metadata)
+        else:
+            # 显示报告
+            st.markdown(response.content)
+
+            # 调试：显示内容长度
+            st.caption(f"报告长度: {len(response.content)} 字符")
 
         # 显示元数据
         with st.expander("📊 详细元数据", expanded=False):
