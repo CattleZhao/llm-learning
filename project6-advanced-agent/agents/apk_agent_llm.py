@@ -119,6 +119,9 @@ class LLMAPKAnalysisAgent(BaseAgent):
         self.current_analysis: Dict[str, Any] = {}
         self._apk_path: Optional[str] = None
 
+        # 工具结果大小限制（字符数）
+        self.max_tool_result_size = 50000  # 50KB
+
     def think(
         self,
         input_text: str,
@@ -249,8 +252,20 @@ class LLMAPKAnalysisAgent(BaseAgent):
                     return text_blocks[0].text
                 return "分析完成"
 
-            # 执行工具调用
-            messages.append({"role": "assistant", "content": response.content})
+            # 执行工具调用 - 转换 response.content 为可序列化格式
+            assistant_content = []
+            for block in response.content:
+                if hasattr(block, 'model_dump'):
+                    assistant_content.append(block.model_dump())
+                elif hasattr(block, 'dict'):
+                    assistant_content.append(block.dict())
+                else:
+                    # 降级处理：转换为基本类型
+                    assistant_content.append({
+                        "type": block.type,
+                        **(block.__dict__ if hasattr(block, '__dict__') else {})
+                    })
+            messages.append({"role": "assistant", "content": assistant_content})
 
             logger.info(f"Claude 请求调用 {len(tool_use_blocks)} 个工具")
 
@@ -272,6 +287,16 @@ class LLMAPKAnalysisAgent(BaseAgent):
                 # 执行工具
                 tool_result = self.tool_executor.execute(tool_name, tool_input)
 
+                # 截断过大的结果以避免超出 token 限制
+                result_str = str(tool_result)
+                if len(result_str) > self.max_tool_result_size:
+                    logger.warning(f"工具 {tool_name} 结果过大 ({len(result_str)} 字符)，截断到 {self.max_tool_result_size}")
+                    result_str = result_str[:self.max_tool_result_size] + "\n\n... (结果已截断)"
+                    # 保存完整结果到 current_analysis，但只传递摘要给 LLM
+                    self.current_analysis[tool_name] = tool_result
+                else:
+                    self.current_analysis[tool_name] = tool_result
+
                 # 格式化结果摘要
                 result_summary = ToolFormatter.format_result_summary(tool_name, tool_result)
                 logger.info(f"   执行结果: {result_summary}")
@@ -279,18 +304,15 @@ class LLMAPKAnalysisAgent(BaseAgent):
                 # Web 状态更新 - 显示结果摘要
                 self.on_status_update(f"   ✓ {result_summary}")
 
-                # 添加工具结果到消息
+                # 添加工具结果到消息（使用处理后的字符串）
                 messages.append({
                     "role": "user",
                     "content": [{
                         "type": "tool_result",
                         "tool_use_id": tool_use.id,
-                        "content": str(tool_result)
+                        "content": result_str
                     }]
                 })
-
-                # 保存分析结果
-                self.current_analysis[tool_name] = tool_result
 
         logger.warning("达到最大迭代次数")
         return "分析达到最大迭代次数"
