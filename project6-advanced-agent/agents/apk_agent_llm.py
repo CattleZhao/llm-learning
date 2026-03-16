@@ -238,19 +238,25 @@ class LLMAPKAnalysisAgent(BaseAgent):
             text_blocks = []
 
             for block in response.content:
+                logger.info(f"  Block type: {block.type}")
                 if block.type == "tool_use":
                     tool_use_blocks.append(block)
                 elif block.type == "text":
                     text_blocks.append(block)
+                    logger.info(f"  Text content: {block.text[:100] if block.text else '(empty)'}...")
 
             # 如果没有工具调用，说明 Claude 已完成分析
             if not tool_use_blocks:
                 logger.info("\n" + "=" * 60)
                 logger.info("Claude 分析完成")
+                logger.info(f"Text blocks 数量: {len(text_blocks)}")
                 logger.info("=" * 60)
                 if text_blocks:
-                    return text_blocks[0].text
-                return "分析完成"
+                    result = text_blocks[0].text
+                    logger.info(f"返回报告长度: {len(result) if result else 0}")
+                    return result
+                logger.warning("没有找到 text_blocks，返回默认消息")
+                return "分析完成（无详细报告）"
 
             # 执行工具调用 - 转换 response.content 为可序列化格式
             assistant_content = []

@@ -398,15 +398,24 @@ def main():
 
         response = st.session_state.analysis_result
 
+        # 调试：显示响应状态
+        st.caption(f"Content 长度: {len(response.content) if response.content else 0} | 类型: {type(response.content)}")
+
         # 直接显示 LLM 生成的报告（按用户定义的格式）
         if response.content:
             st.markdown(response.content)
         else:
             st.warning("⚠️ 报告内容为空")
+            st.error("LLM 没有生成报告内容，请检查：")
+            st.markdown("""
+            1. System Prompt 是否正确定义了输出格式
+            2. LLM 是否正确调用工具获取数据
+            3. 查看下方调试信息了解详情
+            """)
             st.json(response.metadata)
 
         # 可选：显示原始元数据（折叠）
-        with st.expander("🔧 调试信息", expanded=False):
+        with st.expander("🔧 调试信息", expanded=True):
             st.json(response.metadata)
 
     # 使用说明
