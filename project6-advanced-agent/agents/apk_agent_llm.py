@@ -8,11 +8,12 @@ LLM 自主决定调用哪些分析工具
 """
 import sys
 import logging
-import hashlib
-import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable
-from datetime import datetime
+
+# 导入拆分后的模块
+from .history_manager import HistoryManager
+from .report_parser import ReportParser
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -129,9 +130,11 @@ class LLMAPKAnalysisAgent(BaseAgent):
         self.total_input_tokens = 0
         self.total_output_tokens = 0
 
-        # 历史记录存储目录
-        self.history_dir = Path(__file__).parent.parent / "memory" / "apk_history"
-        self.history_dir.mkdir(parents=True, exist_ok=True)
+        # 历史记录管理器
+        self.history_manager = HistoryManager()
+
+        # 报告解析器
+        self.report_parser = ReportParser()
 
     def think(
         self,
@@ -164,7 +167,7 @@ class LLMAPKAnalysisAgent(BaseAgent):
             )
 
         # 计算 APK hash 并检查历史记录
-        apk_hash = self._calculate_apk_hash(apk_path)
+        apk_hash = self.history_manager.calculate_apk_hash(apk_path)
         self._apk_path = apk_path
 
         # 重置分析状态（防止多次调用时数据累积）
@@ -173,7 +176,7 @@ class LLMAPKAnalysisAgent(BaseAgent):
         self.total_output_tokens = 0
 
         # 尝试加载历史分析数据
-        history = self._load_history(apk_hash)
+        history = self.history_manager.load(apk_hash)
         if history:
             self.current_analysis = history.get("analysis", {})
             self.total_input_tokens = history.get("input_tokens", 0)
@@ -202,8 +205,8 @@ class LLMAPKAnalysisAgent(BaseAgent):
                 self.on_status_update("⚠️ LLM 未生成报告，使用工具结果生成默认报告")
 
             # 从 LLM 报告中解析风险等级和发现数量
-            risk_level = self._parse_risk_level_from_report(final_response)
-            findings_count = self._parse_findings_count_from_report(final_response)
+            risk_level = self.report_parser.parse_risk_level(final_response)
+            findings_count = self.report_parser.parse_findings_count(final_response)
 
             # 构建元数据
             metadata = {
@@ -221,7 +224,15 @@ class LLMAPKAnalysisAgent(BaseAgent):
             }
 
             # 保存历史记录
-            self._save_history(apk_hash, final_response, metadata)
+            self.history_manager.save(
+                apk_hash=apk_hash,
+                apk_path=apk_path,
+                analysis=self.current_analysis,
+                report=final_response,
+                input_tokens=self.total_input_tokens,
+                output_tokens=self.total_output_tokens,
+                metadata=metadata
+            )
 
             return AgentResponse(
                 content=final_response,
@@ -483,69 +494,6 @@ class LLMAPKAnalysisAgent(BaseAgent):
         lines.append("*注: LLM 未生成详细报告，以上为工具调用原始结果的摘要。*")
 
         return "\n".join(lines)
-
-    def _parse_risk_level_from_report(self, report: str) -> str:
-        """从 LLM 生成的报告中解析风险等级"""
-        import re
-        # 查找风险等级关键词
-        for level in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
-            if level in report.upper():
-                return level.lower()
-        # 默认返回 low
-        return "low"
-
-    def _parse_findings_count_from_report(self, report: str) -> int:
-        """从 LLM 生成的报告中估计发现数量"""
-        # 统计发现相关的关键词出现次数
-        keywords = ["发现", "检测到", "匹配", "警告", "风险"]
-        count = 0
-        for keyword in keywords:
-            count += report.count(keyword)
-        # 限制在合理范围内
-        return min(count, 100)
-
-    def _calculate_apk_hash(self, apk_path: str) -> str:
-        """计算 APK 文件的 SHA256 hash"""
-        sha256_hash = hashlib.sha256()
-        with open(apk_path, "rb") as f:
-            for byte_block in iter(lambda: f.read(4096), b""):
-                sha256_hash.update(byte_block)
-        return sha256_hash.hexdigest()
-
-    def _get_history_path(self, apk_hash: str) -> Path:
-        """获取历史记录文件路径"""
-        return self.history_dir / f"{apk_hash}.json"
-
-    def _load_history(self, apk_hash: str) -> Optional[Dict[str, Any]]:
-        """加载历史分析记录"""
-        history_path = self._get_history_path(apk_hash)
-        if history_path.exists():
-            try:
-                with open(history_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except Exception as e:
-                logger.warning(f"加载历史记录失败: {e}")
-        return None
-
-    def _save_history(self, apk_hash: str, content: str, metadata: Dict[str, Any]):
-        """保存分析记录到历史"""
-        history_path = self._get_history_path(apk_hash)
-        history_data = {
-            "apk_hash": apk_hash,
-            "apk_path": self._apk_path,
-            "timestamp": datetime.now().isoformat(),
-            "analysis": self.current_analysis,
-            "report": content,
-            "input_tokens": self.total_input_tokens,
-            "output_tokens": self.total_output_tokens,
-            "metadata": metadata
-        }
-        try:
-            with open(history_path, 'w', encoding='utf-8') as f:
-                json.dump(history_data, f, ensure_ascii=False, indent=2)
-            logger.info(f"历史记录已保存: {history_path}")
-        except Exception as e:
-            logger.warning(f"保存历史记录失败: {e}")
 
     def close(self):
         """关闭连接"""
