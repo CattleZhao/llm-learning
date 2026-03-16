@@ -274,21 +274,23 @@ class LLMAPKAnalysisAgent(BaseAgent):
                     "content": "请基于已收集的分析数据，按照你 System Prompt 中定义的输出格式，生成完整的 APK 安全分析报告。"
                 })
 
-                # 再次请求生成报告
-                final_response = self.client.messages.create(
+                # 再次请求生成报告（使用流式模式避免超时）
+                logger.info("使用流式模式请求最终报告...")
+                final_text = ""
+                with self.client.messages.stream(
                     model=self.model,
                     max_tokens=4096,
                     system=self.system_prompt,
                     messages=messages
-                )
+                ) as stream:
+                    for text in stream.text_stream:
+                        final_text += text
 
-                # 提取最终报告
-                for block in final_response.content:
-                    if block.type == "text" and block.text:
-                        logger.info(f"获取到最终报告，长度: {len(block.text)}")
-                        return block.text
+                if final_text:
+                    logger.info(f"获取到最终报告，长度: {len(final_text)}")
+                    return final_text
 
-                logger.warning("仍未获取到文本报告，返回默认消息")
+                logger.warning("流式响应为空，返回默认消息")
                 return "分析完成，但 LLM 未生成详细报告"
 
             # 执行工具调用 - 转换 response.content 为可序列化格式
