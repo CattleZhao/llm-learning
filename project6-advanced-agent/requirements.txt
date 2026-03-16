@@ -1,2 +1,5 @@
+streamlit
+anthropic
+python-dotenv
 weasyprint
-markdown2
+markdown
