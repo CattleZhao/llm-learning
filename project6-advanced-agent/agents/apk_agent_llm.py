@@ -167,6 +167,12 @@ class LLMAPKAnalysisAgent(BaseAgent):
             # 执行 LLM 工具调用循环
             final_response = self._run_tool_loop(user_message)
 
+            # Fallback: 如果 LLM 没有生成报告，用 current_analysis 生成
+            if not final_response or len(final_response) < 50:
+                logger.warning(f"LLM 报告为空或过短 (长度: {len(final_response) if final_response else 0})，使用 fallback")
+                final_response = self._generate_fallback_report()
+                self.on_status_update("⚠️ LLM 未生成报告，使用工具结果生成默认报告")
+
             # 从 LLM 报告中解析风险等级和发现数量
             risk_level = self._parse_risk_level_from_report(final_response)
             findings_count = self._parse_findings_count_from_report(final_response)
@@ -178,7 +184,8 @@ class LLMAPKAnalysisAgent(BaseAgent):
                     "model": self.model,
                     "risk_level": risk_level,
                     "findings_count": findings_count,
-                    "analysis": self.current_analysis
+                    "analysis": self.current_analysis,
+                    "report_source": "llm" if len(final_response) > 100 else "fallback"
                 }
             )
 
@@ -243,20 +250,46 @@ class LLMAPKAnalysisAgent(BaseAgent):
                     tool_use_blocks.append(block)
                 elif block.type == "text":
                     text_blocks.append(block)
-                    logger.info(f"  Text content: {block.text[:100] if block.text else '(empty)'}...")
+                    if block.text:
+                        logger.info(f"  Text content: {block.text[:100]}...")
 
             # 如果没有工具调用，说明 Claude 已完成分析
             if not tool_use_blocks:
                 logger.info("\n" + "=" * 60)
-                logger.info("Claude 分析完成")
+                logger.info("Claude 分析完成（无新工具调用）")
                 logger.info(f"Text blocks 数量: {len(text_blocks)}")
                 logger.info("=" * 60)
-                if text_blocks:
+
+                # 如果有文本内容，直接返回
+                if text_blocks and text_blocks[0].text:
                     result = text_blocks[0].text
-                    logger.info(f"返回报告长度: {len(result) if result else 0}")
+                    logger.info(f"返回报告长度: {len(result)}")
                     return result
-                logger.warning("没有找到 text_blocks，返回默认消息")
-                return "分析完成（无详细报告）"
+
+                # 如果没有文本内容，请求 LLM 生成最终报告
+                logger.info("LLM 未生成文本报告，请求生成最终报告...")
+                messages.append({"role": "assistant", "content": response.content})
+                messages.append({
+                    "role": "user",
+                    "content": "请基于已收集的分析数据，按照你 System Prompt 中定义的输出格式，生成完整的 APK 安全分析报告。"
+                })
+
+                # 再次请求生成报告
+                final_response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=4096,
+                    system=self.system_prompt,
+                    messages=messages
+                )
+
+                # 提取最终报告
+                for block in final_response.content:
+                    if block.type == "text" and block.text:
+                        logger.info(f"获取到最终报告，长度: {len(block.text)}")
+                        return block.text
+
+                logger.warning("仍未获取到文本报告，返回默认消息")
+                return "分析完成，但 LLM 未生成详细报告"
 
             # 执行工具调用 - 转换 response.content 为可序列化格式
             assistant_content = []
@@ -322,6 +355,38 @@ class LLMAPKAnalysisAgent(BaseAgent):
 
         logger.warning("达到最大迭代次数")
         return "分析达到最大迭代次数"
+
+    def _generate_fallback_report(self) -> str:
+        """当 LLM 未生成报告时，用工具结果生成默认报告"""
+        lines = ["# APK 安全分析报告\n"]
+        lines.append("## 基本信息\n")
+
+        # 从 manifest 获取基本信息
+        if "jadx_get_manifest" in self.current_analysis:
+            manifest = self.current_analysis["jadx_get_manifest"]
+            if isinstance(manifest, dict):
+                lines.append(f"- 包名: `{manifest.get('package', 'unknown')}`")
+                lines.append(f"- 版本: `{manifest.get('version_name', 'unknown')}`\n")
+
+        lines.append("## 工具调用结果\n")
+
+        # 列出所有调用的工具
+        for tool_name, result in self.current_analysis.items():
+            if isinstance(result, dict):
+                lines.append(f"### {tool_name}")
+                # 只显示摘要信息
+                if "count" in result:
+                    lines.append(f"- 数量: {result['count']}")
+                if "rules" in result:
+                    lines.append(f"- 匹配规则数: {len(result.get('rules', []))}")
+                if "urls" in result:
+                    lines.append(f"- URL 数: {len(result.get('urls', []))}")
+                lines.append("")
+
+        lines.append("\n---\n")
+        lines.append("*注: LLM 未生成详细报告，以上为工具调用原始结果的摘要。*")
+
+        return "\n".join(lines)
 
     def _parse_risk_level_from_report(self, report: str) -> str:
         """从 LLM 生成的报告中解析风险等级"""
