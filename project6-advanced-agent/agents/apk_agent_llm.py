@@ -283,7 +283,22 @@ class LLMAPKAnalysisAgent(BaseAgent):
 
                 # 如果没有文本内容，请求 LLM 生成最终报告
                 logger.info("LLM 未生成文本报告，请求生成最终报告...")
-                messages.append({"role": "assistant", "content": response.content})
+
+                # 转换 response.content 为可序列化格式
+                assistant_content = []
+                for block in response.content:
+                    if hasattr(block, 'model_dump'):
+                        assistant_content.append(block.model_dump())
+                    elif hasattr(block, 'dict'):
+                        assistant_content.append(block.dict())
+                    else:
+                        assistant_content.append({
+                            "type": block.type,
+                            **(block.__dict__ if hasattr(block, '__dict__') else {})
+                        })
+                messages.append({"role": "assistant", "content": assistant_content})
+
+                # 添加用户请求生成报告的消息
                 messages.append({
                     "role": "user",
                     "content": "请基于已收集的分析数据，按照你 System Prompt 中定义的输出格式，生成完整的 APK 安全分析报告。"
