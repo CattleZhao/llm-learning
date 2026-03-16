@@ -141,6 +141,11 @@ class LLMAPKAnalysisAgent(BaseAgent):
         Returns:
             AgentResponse: 分析结果
         """
+        # 重置分析状态（防止多次调用时数据累积）
+        self.current_analysis = {}
+        self.total_input_tokens = 0
+        self.total_output_tokens = 0
+
         # 提取 APK 路径
         apk_path = self._extract_apk_path(input_text, context)
 
@@ -306,6 +311,27 @@ class LLMAPKAnalysisAgent(BaseAgent):
 
                 # 再次请求生成报告（使用流式模式避免超时）
                 logger.info("使用流式模式请求最终报告...")
+
+                # 先尝试非流式 API 看是否能获取响应
+                logger.info("先测试非流式 API...")
+                try:
+                    test_response = self.client.messages.create(
+                        model=self.model,
+                        max_tokens=4096,
+                        system=self.system_prompt,
+                        messages=messages
+                    )
+                    logger.info(f"非流式 API 响应成功，content blocks: {len(test_response.content)}")
+                    for block in test_response.content:
+                        logger.info(f"  Block type: {block.type}")
+                        if block.type == "text" and block.text:
+                            logger.info(f"  找到文本内容，长度: {len(block.text)}")
+                            return block.text
+                except Exception as e:
+                    logger.warning(f"非流式 API 失败: {e}")
+
+                # 如果非流式失败，尝试流式
+                logger.info("非流式无内容，尝试流式 API...")
                 final_text = ""
                 event_count = 0
 
@@ -319,27 +345,15 @@ class LLMAPKAnalysisAgent(BaseAgent):
                         event_count += 1
                         logger.info(f"  Event #{event_count}: type={event.type}")
 
-                        if event.type == "content_block_start":
-                            logger.info(f"    Content block started, index={event.index}")
-                        elif event.type == "content_block_delta":
-                            logger.info(f"    Delta received, delta type={type(event.delta)}")
+                        if event.type == "content_block_delta":
                             if hasattr(event.delta, 'text'):
                                 text_chunk = event.delta.text
                                 final_text += text_chunk
-                                logger.info(f"    Text chunk length: {len(text_chunk)}, total: {len(final_text)}")
-                            elif hasattr(event, 'text'):
-                                final_text += event.text
-                        elif event.type == "content_block_stop":
-                            logger.info(f"    Content block stopped, index={event.index}")
-                        elif event.type == "message_delta":
-                            logger.info(f"    Message delta")
-                            if hasattr(event.delta, 'stop_reason'):
-                                logger.info(f"    Stop reason: {event.delta.stop_reason}")
+                                logger.info(f"    Text chunk: {len(text_chunk)} chars, total: {len(final_text)}")
                         elif event.type == "message_stop":
-                            logger.info("    Message stopped (stream complete)")
                             break
 
-                logger.info(f"流式响应完成，共处理 {event_count} 个事件，最终文本长度: {len(final_text)}")
+                logger.info(f"流式响应完成，{event_count} 个事件，文本长度: {len(final_text)}")
 
                 if final_text:
                     logger.info(f"获取到最终报告，长度: {len(final_text)}")
