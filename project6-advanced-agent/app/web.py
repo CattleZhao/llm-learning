@@ -12,6 +12,10 @@ import streamlit as st
 import sys
 from pathlib import Path
 import time
+from datetime import datetime
+from fpdf import FPDF
+from io import BytesIO
+import re
 
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -106,6 +110,77 @@ h1, h2, h3 {
 }
 </style>
 """, unsafe_allow_html=True)
+
+
+def generate_pdf_report(content: str, apk_name: str) -> BytesIO:
+    """生成 PDF 报告"""
+    pdf = FPDF()
+    pdf.add_page()
+
+    # 添加中文字体支持（使用系统默认字体）
+    pdf.set_font("Arial", size=12)
+
+    # 标题
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, f"APK Security Analysis Report: {apk_name}", ln=True, align='C')
+    pdf.ln(5)
+
+    # 生成时间
+    pdf.set_font("Arial", size=10)
+    pdf.cell(0, 10, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ln=True)
+    pdf.ln(10)
+
+    # 解析 Markdown 内容并添加到 PDF
+    pdf.set_font("Arial", size=11)
+
+    lines = content.split('\n')
+    for line in lines:
+        line = line.strip()
+        if not line:
+            pdf.ln(3)
+            continue
+
+        # 处理 Markdown 标题
+        if line.startswith('# '):
+            pdf.set_font("Arial", 'B', 14)
+            pdf.cell(0, 10, line[2:].strip(), ln=True)
+            pdf.ln(2)
+        elif line.startswith('## '):
+            pdf.set_font("Arial", 'B', 12)
+            pdf.cell(0, 8, line[3:].strip(), ln=True)
+            pdf.ln(2)
+        elif line.startswith('### '):
+            pdf.set_font("Arial", 'B', 11)
+            pdf.cell(0, 7, line[4:].strip(), ln=True)
+            pdf.ln(2)
+        # 处理列表项
+        elif line.startswith('- ') or line.startswith('* '):
+            pdf.cell(10, 6, chr(149), ln=False)  # 项目符号
+            pdf.cell(0, 6, line[2:].strip(), ln=True)
+        # 处理编号列表
+        elif re.match(r'^\d+\.\s', line):
+            pdf.cell(0, 6, line, ln=True)
+        # 普通文本
+        else:
+            # 处理粗体文本 **text**
+            line = re.sub(r'\*\*(.*?)\*\*', r'\1', line)
+            # 处理代码块
+            if line.startswith('```'):
+                continue
+            # 处理行内代码
+            line = re.sub(r'`(.*?)`', r'\1', line)
+            # 多字节字符处理
+            try:
+                pdf.cell(0, 6, line.encode('latin-1', 'replace').decode('latin-1'), ln=True)
+            except:
+                # 如果编码失败，跳过这行
+                pdf.cell(0, 6, "[Unsupported characters]", ln=True)
+
+    # 保存到内存
+    buffer = BytesIO()
+    pdf.output(buffer)
+    buffer.seek(0)
+    return buffer
 
 
 def main():
@@ -404,6 +479,31 @@ def main():
         # 直接显示 LLM 生成的报告（按用户定义的格式）
         if response.content:
             st.markdown(response.content)
+
+            # 下载 PDF 按钮
+            st.markdown("---")
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                if st.button("📄 下载 PDF 报告", type="secondary", use_container_width=True):
+                    try:
+                        # 获取 APK 名称
+                        apk_name = Path(response.metadata.get("apk_path", "unknown")).stem
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        filename = f"apk_report_{apk_name}_{timestamp}.pdf"
+
+                        # 生成 PDF
+                        pdf_buffer = generate_pdf_report(response.content, apk_name)
+
+                        # 提供下载
+                        st.download_button(
+                            label="⬇️ 点击下载",
+                            data=pdf_buffer,
+                            file_name=filename,
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error(f"生成 PDF 失败: {e}")
         else:
             st.warning("⚠️ 报告内容为空")
             st.error("LLM 没有生成报告内容，请检查：")
