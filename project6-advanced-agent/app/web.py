@@ -398,32 +398,16 @@ def main():
 
         response = st.session_state.analysis_result
 
-        # 调试信息
-        if not response.content:
+        # 直接显示 LLM 生成的报告（按用户定义的格式）
+        if response.content:
+            st.markdown(response.content)
+        else:
             st.warning("⚠️ 报告内容为空")
             st.json(response.metadata)
-        else:
-            # 显示报告
-            st.markdown(response.content)
 
-            # 调试：显示内容长度
-            st.caption(f"报告长度: {len(response.content)} 字符")
-
-        # 显示元数据
-        with st.expander("📊 详细元数据", expanded=False):
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("风险等级", response.metadata.get("risk_level", "unknown"))
-            with col2:
-                st.metric("发现数量", response.metadata.get("findings_count", 0))
-            with col3:
-                score = response.metadata.get("quality_score", 0)
-                st.metric("质量评分", f"{score * 100:.1f}%")
-
-            if response.metadata.get("risk_score"):
-                st.caption(f"风险分数: {response.metadata['risk_score']}")
-            if response.metadata.get("confidence"):
-                st.caption(f"置信度: {response.metadata['confidence'] * 100:.1f}%")
+        # 可选：显示原始元数据（折叠）
+        with st.expander("🔧 调试信息", expanded=False):
+            st.json(response.metadata)
 
     # 使用说明
     st.markdown("---")
