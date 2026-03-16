@@ -292,6 +292,7 @@ class LLMAPKAnalysisAgent(BaseAgent):
                 # 再次请求生成报告（使用流式模式避免超时）
                 logger.info("使用流式模式请求最终报告...")
                 final_text = ""
+                event_count = 0
 
                 with self.client.messages.stream(
                     model=self.model,
@@ -300,20 +301,30 @@ class LLMAPKAnalysisAgent(BaseAgent):
                     messages=messages
                 ) as stream:
                     for event in stream:
-                        if event.type == "content_block_delta":
+                        event_count += 1
+                        logger.info(f"  Event #{event_count}: type={event.type}")
+
+                        if event.type == "content_block_start":
+                            logger.info(f"    Content block started, index={event.index}")
+                        elif event.type == "content_block_delta":
+                            logger.info(f"    Delta received, delta type={type(event.delta)}")
                             if hasattr(event.delta, 'text'):
-                                final_text += event.delta.text
+                                text_chunk = event.delta.text
+                                final_text += text_chunk
+                                logger.info(f"    Text chunk length: {len(text_chunk)}, total: {len(final_text)}")
                             elif hasattr(event, 'text'):
                                 final_text += event.text
+                        elif event.type == "content_block_stop":
+                            logger.info(f"    Content block stopped, index={event.index}")
+                        elif event.type == "message_delta":
+                            logger.info(f"    Message delta")
+                            if hasattr(event.delta, 'stop_reason'):
+                                logger.info(f"    Stop reason: {event.delta.stop_reason}")
                         elif event.type == "message_stop":
-                            # 记录流式请求的 token 使用量
-                            if hasattr(event, 'message') and hasattr(event.message, 'usage'):
-                                usage = event.message.usage
-                                self.total_input_tokens += usage.input_tokens
-                                self.total_output_tokens += usage.output_tokens
-                                logger.info(f"  Token 使用 (流式): 输入={usage.input_tokens}, 输出={usage.output_tokens}")
-                            logger.info("流式响应完成")
+                            logger.info("    Message stopped (stream complete)")
                             break
+
+                logger.info(f"流式响应完成，共处理 {event_count} 个事件，最终文本长度: {len(final_text)}")
 
                 if final_text:
                     logger.info(f"获取到最终报告，长度: {len(final_text)}")
