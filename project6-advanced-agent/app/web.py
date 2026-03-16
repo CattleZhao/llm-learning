@@ -13,9 +13,9 @@ import sys
 from pathlib import Path
 import time
 from datetime import datetime
-from fpdf import FPDF
 from io import BytesIO
-import re
+import markdown
+from weasyprint import HTML
 
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -113,72 +113,133 @@ h1, h2, h3 {
 
 
 def generate_pdf_report(content: str, apk_name: str) -> BytesIO:
-    """生成 PDF 报告"""
-    pdf = FPDF()
-    pdf.add_page()
+    """生成 PDF 报告（支持中文）"""
+    # 转换 Markdown 为 HTML
+    html_content = markdown.markdown(content, extensions=['tables', 'fenced_code'])
 
-    # 添加中文字体支持（使用系统默认字体）
-    pdf.set_font("Arial", size=12)
+    # 构建完整的 HTML 文档
+    html_template = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            @page {{
+                size: A4;
+                margin: 2cm;
+                @bottom-center {{
+                    content: "Page " counter(page) " of " counter(pages);
+                    font-size: 10pt;
+                    color: #666;
+                }}
+            }}
+            body {{
+                font-family: "Microsoft YaHei", "SimSun", Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+            }}
+            h1 {{
+                color: #1e293b;
+                border-bottom: 3px solid #3b82f6;
+                padding-bottom: 10px;
+                page-break-after: avoid;
+            }}
+            h2 {{
+                color: #334155;
+                border-bottom: 2px solid #94a3b8;
+                padding-bottom: 8px;
+                margin-top: 20px;
+                page-break-after: avoid;
+            }}
+            h3 {{
+                color: #475569;
+                margin-top: 15px;
+                page-break-after: avoid;
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin: 15px 0;
+                page-break-inside: avoid;
+            }}
+            th, td {{
+                border: 1px solid #e2e8f0;
+                padding: 8px 12px;
+                text-align: left;
+            }}
+            th {{
+                background-color: #f1f5f9;
+                font-weight: bold;
+            }}
+            ul, ol {{
+                margin: 10px 0;
+                padding-left: 20px;
+            }}
+            li {{
+                margin: 5px 0;
+            }}
+            code {{
+                background-color: #f1f5f9;
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-family: "Courier New", monospace;
+                font-size: 0.9em;
+            }}
+            pre {{
+                background-color: #1e293b;
+                color: #e2e8f0;
+                padding: 15px;
+                border-radius: 5px;
+                overflow-x: auto;
+                page-break-inside: avoid;
+            }}
+            pre code {{
+                background-color: transparent;
+                color: inherit;
+                padding: 0;
+            }}
+            .header {{
+                text-align: center;
+                margin-bottom: 30px;
+                page-break-after: avoid;
+            }}
+            .footer {{
+                margin-top: 30px;
+                padding-top: 15px;
+                border-top: 1px solid #e2e8f0;
+                font-size: 10pt;
+                color: #666;
+            }}
+            strong {{
+                color: #1e293b;
+                font-weight: bold;
+            }}
+            hr {{
+                border: none;
+                border-top: 1px solid #e2e8f0;
+                margin: 20px 0;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>🔍 APK 安全分析报告</h1>
+            <p><strong>APK 名称:</strong> {apk_name}</p>
+            <p><strong>生成时间:</strong> {datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')}</p>
+        </div>
+        <div class="content">
+            {html_content}
+        </div>
+        <div class="footer">
+            <p>本报告由 APK-Sentinel 自动生成 | Powered by Claude & JADX</p>
+        </div>
+    </body>
+    </html>
+    """
 
-    # 标题
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, f"APK Security Analysis Report: {apk_name}", ln=True, align='C')
-    pdf.ln(5)
-
-    # 生成时间
-    pdf.set_font("Arial", size=10)
-    pdf.cell(0, 10, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ln=True)
-    pdf.ln(10)
-
-    # 解析 Markdown 内容并添加到 PDF
-    pdf.set_font("Arial", size=11)
-
-    lines = content.split('\n')
-    for line in lines:
-        line = line.strip()
-        if not line:
-            pdf.ln(3)
-            continue
-
-        # 处理 Markdown 标题
-        if line.startswith('# '):
-            pdf.set_font("Arial", 'B', 14)
-            pdf.cell(0, 10, line[2:].strip(), ln=True)
-            pdf.ln(2)
-        elif line.startswith('## '):
-            pdf.set_font("Arial", 'B', 12)
-            pdf.cell(0, 8, line[3:].strip(), ln=True)
-            pdf.ln(2)
-        elif line.startswith('### '):
-            pdf.set_font("Arial", 'B', 11)
-            pdf.cell(0, 7, line[4:].strip(), ln=True)
-            pdf.ln(2)
-        # 处理列表项
-        elif line.startswith('- ') or line.startswith('* '):
-            pdf.cell(10, 6, chr(149), ln=False)  # 项目符号
-            pdf.cell(0, 6, line[2:].strip(), ln=True)
-        # 处理编号列表
-        elif re.match(r'^\d+\.\s', line):
-            pdf.cell(0, 6, line, ln=True)
-        # 普通文本
-        else:
-            # 处理粗体文本 **text**
-            line = re.sub(r'\*\*(.*?)\*\*', r'\1', line)
-            # 处理代码块
-            if line.startswith('```'):
-                continue
-            # 处理行内代码
-            line = re.sub(r'`(.*?)`', r'\1', line)
-            # 多字节字符处理
-            try:
-                pdf.cell(0, 6, line.encode('latin-1', 'replace').decode('latin-1'), ln=True)
-            except:
-                # 如果编码失败，跳过这行
-                pdf.cell(0, 6, "[Unsupported characters]", ln=True)
-
-    # 保存到内存
+    # 使用 weasyprint 生成 PDF
     buffer = BytesIO()
-    pdf.output(buffer)
+    HTML(string=html_template).write_pdf(buffer)
     buffer.seek(0)
     return buffer
 
