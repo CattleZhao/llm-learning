@@ -415,8 +415,26 @@ def main():
             st.json(response.metadata)
 
         # 可选：显示原始元数据（折叠）
-        with st.expander("🔧 调试信息", expanded=True):
+        with st.expander("🔧 调试信息", expanded=False):
             st.json(response.metadata)
+
+        # 显示 Token 使用量
+        token_usage = response.metadata.get("token_usage")
+        if token_usage:
+            st.markdown("---")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("📥 输入 Tokens", token_usage.get("input_tokens", 0))
+            with col2:
+                st.metric("📤 输出 Tokens", token_usage.get("output_tokens", 0))
+            with col3:
+                st.metric("💰 总计 Tokens", token_usage.get("total_tokens", 0))
+
+            # 计算成本（基于 Claude Sonnet 4 定价）
+            input_cost = token_usage.get("input_tokens", 0) * 3 / 1_000_000  # $3/1M tokens
+            output_cost = token_usage.get("output_tokens", 0) * 15 / 1_000_000  # $15/1M tokens
+            total_cost = input_cost + output_cost
+            st.caption(f"💵 预估成本: ${total_cost:.4f} (输入 ${input_cost:.4f} + 输出 ${output_cost:.4f})")
 
     # 使用说明
     st.markdown("---")

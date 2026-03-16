@@ -122,6 +122,10 @@ class LLMAPKAnalysisAgent(BaseAgent):
         # 工具结果大小限制（字符数）
         self.max_tool_result_size = 50000  # 50KB
 
+        # Token 使用统计
+        self.total_input_tokens = 0
+        self.total_output_tokens = 0
+
     def think(
         self,
         input_text: str,
@@ -185,7 +189,12 @@ class LLMAPKAnalysisAgent(BaseAgent):
                     "risk_level": risk_level,
                     "findings_count": findings_count,
                     "analysis": self.current_analysis,
-                    "report_source": "llm" if len(final_response) > 100 else "fallback"
+                    "report_source": "llm" if len(final_response) > 100 else "fallback",
+                    "token_usage": {
+                        "input_tokens": self.total_input_tokens,
+                        "output_tokens": self.total_output_tokens,
+                        "total_tokens": self.total_input_tokens + self.total_output_tokens
+                    }
                 }
             )
 
@@ -240,6 +249,12 @@ class LLMAPKAnalysisAgent(BaseAgent):
                 tools=self.tools
             )
 
+            # 记录 token 使用量
+            if hasattr(response, 'usage') and response.usage:
+                self.total_input_tokens += response.usage.input_tokens
+                self.total_output_tokens += response.usage.output_tokens
+                logger.info(f"  Token 使用: 输入={response.usage.input_tokens}, 输出={response.usage.output_tokens}")
+
             # 检查是否有工具调用
             tool_use_blocks = []
             text_blocks = []
@@ -291,6 +306,12 @@ class LLMAPKAnalysisAgent(BaseAgent):
                             elif hasattr(event, 'text'):
                                 final_text += event.text
                         elif event.type == "message_stop":
+                            # 记录流式请求的 token 使用量
+                            if hasattr(event, 'message') and hasattr(event.message, 'usage'):
+                                usage = event.message.usage
+                                self.total_input_tokens += usage.input_tokens
+                                self.total_output_tokens += usage.output_tokens
+                                logger.info(f"  Token 使用 (流式): 输入={usage.input_tokens}, 输出={usage.output_tokens}")
                             logger.info("流式响应完成")
                             break
 
