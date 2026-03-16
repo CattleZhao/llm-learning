@@ -164,11 +164,17 @@ class LLMAPKAnalysisAgent(BaseAgent):
             # 执行 LLM 工具调用循环
             final_response = self._run_tool_loop(user_message)
 
+            # 计算 metadata（与硬编码流程 Agent 保持一致的格式）
+            findings = self._extract_findings_from_analysis()
+            risk_level = self._calculate_risk_from_findings(findings)
+
             return AgentResponse(
                 content=final_response,
                 metadata={
                     "apk_path": apk_path,
                     "model": self.model,
+                    "risk_level": risk_level,
+                    "findings_count": len(findings),
                     "analysis": self.current_analysis
                 }
             )
@@ -199,7 +205,7 @@ class LLMAPKAnalysisAgent(BaseAgent):
 
         持续与 Claude 交互，直到它不再请求工具调用
         """
-        messages = [
+        messages: List[Dict[str, Any]] = [
             {"role": "user", "content": user_message}
         ]
 
@@ -288,6 +294,66 @@ class LLMAPKAnalysisAgent(BaseAgent):
 
         logger.warning("达到最大迭代次数")
         return "分析达到最大迭代次数"
+
+    def _extract_findings_from_analysis(self) -> List[Dict[str, Any]]:
+        """从 current_analysis 中提取发现的安全问题"""
+        findings = []
+
+        # 从 match_malware_rules 结果中提取
+        if "match_malware_rules" in self.current_analysis:
+            result = self.current_analysis["match_malware_rules"]
+            if isinstance(result, dict) and result.get("rules"):
+                for rule in result["rules"]:
+                    findings.append({
+                        "category": rule.get("category", "malware_rule"),
+                        "severity": rule.get("severity", "medium"),
+                        "description": f"匹配到恶意规则: {rule.get('name', 'unknown')}"
+                    })
+
+        # 从权限结果中提取
+        if "jadx_get_permissions" in self.current_analysis:
+            perms = self.current_analysis["jadx_get_permissions"]
+            if isinstance(perms, dict):
+                dangerous_count = perms.get("dangerous_count", 0)
+                if dangerous_count > 0:
+                    findings.append({
+                        "category": "permissions",
+                        "severity": "high" if dangerous_count >= 3 else "medium",
+                        "description": f"发现 {dangerous_count} 个危险权限"
+                    })
+
+        # 从网络信息中提取
+        if "jadx_get_network_info" in self.current_analysis:
+            net = self.current_analysis["jadx_get_network_info"]
+            if isinstance(net, dict):
+                if net.get("has_http") and not net.get("has_https"):
+                    findings.append({
+                        "category": "network",
+                        "severity": "medium",
+                        "description": "发现使用非 HTTPS 的网络通信"
+                    })
+
+        return findings
+
+    def _calculate_risk_from_findings(self, findings: List[Dict[str, Any]]) -> str:
+        """根据 findings 计算风险等级"""
+        if not findings:
+            return "low"
+
+        risk_score = 0
+        severity_scores = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+
+        for finding in findings:
+            risk_score += severity_scores.get(finding.get("severity", "low"), 0)
+
+        if risk_score >= 10:
+            return "critical"
+        elif risk_score >= 6:
+            return "high"
+        elif risk_score >= 3:
+            return "medium"
+        else:
+            return "low"
 
     def close(self):
         """关闭连接"""
