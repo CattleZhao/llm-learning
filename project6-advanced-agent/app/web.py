@@ -155,6 +155,46 @@ def main():
             help="硬编码流程: 固定分析步骤 | LLM 驱动: AI 自主决定调用哪些工具"
         )
 
+        # LLM System Prompt 配置（仅 LLM 驱动模式显示）
+        if agent_type == "LLM 驱动":
+            with st.expander("📝 自定义 System Prompt", expanded=False):
+                st.info("""
+                自定义 LLM 的 System Prompt，指定分析步骤和输出格式。
+                留空则使用默认 prompt。
+                """)
+
+                # 加载默认 prompt 作为占位符
+                from agents.apk_agent_llm import USER_SYSTEM_PROMPT
+
+                custom_system_prompt = st.text_area(
+                    "System Prompt",
+                    value="",
+                    placeholder=USER_SYSTEM_PROMPT,
+                    height=300,
+                    help="输入自定义的 System Prompt，包含分析步骤和输出格式"
+                )
+
+                # 显示输出格式说明
+                st.markdown("""
+                **推荐输出格式：**
+                ```
+                # APK 安全分析报告
+
+                ## 基本信息
+                - 包名: `xxx`
+                - 版本: `xxx`
+
+                ## 风险评估
+                - 风险等级: [LOW/MEDIUM/HIGH/CRITICAL]
+                - 判定: [总结]
+
+                ## 安全发现
+                1. **[严重程度]** [描述]
+                ```
+                """)
+        else:
+            custom_system_prompt = None
+
         # 高级分析选项
         enable_advanced = st.checkbox(
             "启用高级分析",
@@ -297,11 +337,16 @@ def main():
                 with st.spinner("正在分析 APK..."):
                     # 创建 Agent - 根据用户选择
                     if agent_type == "LLM 驱动":
+                        # 使用自定义 prompt（如果提供了）
+                        system_prompt = custom_system_prompt if custom_system_prompt else None
                         agent = create_llm_agent(
                             mcp_server_path=mcp_server_path,
+                            system_prompt=system_prompt,
                             on_status_update=update_status
                         )
                         update_status("🤖 使用 LLM 驱动 Agent")
+                        if system_prompt:
+                            update_status("📝 使用自定义 System Prompt")
                     else:
                         agent = create_apk_agent(
                             mcp_server_path=mcp_server_path,
