@@ -13,9 +13,6 @@ import sys
 from pathlib import Path
 import time
 from datetime import datetime
-from io import BytesIO
-import markdown
-from weasyprint import HTML
 
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -110,138 +107,6 @@ h1, h2, h3 {
 }
 </style>
 """, unsafe_allow_html=True)
-
-
-def generate_pdf_report(content: str, apk_name: str) -> BytesIO:
-    """生成 PDF 报告（支持中文）"""
-    # 转换 Markdown 为 HTML
-    html_content = markdown.markdown(content, extensions=['tables', 'fenced_code'])
-
-    # 构建完整的 HTML 文档
-    html_template = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <style>
-            @page {{
-                size: A4;
-                margin: 2cm;
-                @bottom-center {{
-                    content: "Page " counter(page) " of " counter(pages);
-                    font-size: 10pt;
-                    color: #666;
-                }}
-            }}
-            body {{
-                font-family: "Microsoft YaHei", "SimSun", Arial, sans-serif;
-                line-height: 1.6;
-                color: #333;
-            }}
-            h1 {{
-                color: #1e293b;
-                border-bottom: 3px solid #3b82f6;
-                padding-bottom: 10px;
-                page-break-after: avoid;
-            }}
-            h2 {{
-                color: #334155;
-                border-bottom: 2px solid #94a3b8;
-                padding-bottom: 8px;
-                margin-top: 20px;
-                page-break-after: avoid;
-            }}
-            h3 {{
-                color: #475569;
-                margin-top: 15px;
-                page-break-after: avoid;
-            }}
-            table {{
-                width: 100%;
-                border-collapse: collapse;
-                margin: 15px 0;
-                page-break-inside: avoid;
-            }}
-            th, td {{
-                border: 1px solid #e2e8f0;
-                padding: 8px 12px;
-                text-align: left;
-            }}
-            th {{
-                background-color: #f1f5f9;
-                font-weight: bold;
-            }}
-            ul, ol {{
-                margin: 10px 0;
-                padding-left: 20px;
-            }}
-            li {{
-                margin: 5px 0;
-            }}
-            code {{
-                background-color: #f1f5f9;
-                padding: 2px 6px;
-                border-radius: 3px;
-                font-family: "Courier New", monospace;
-                font-size: 0.9em;
-            }}
-            pre {{
-                background-color: #1e293b;
-                color: #e2e8f0;
-                padding: 15px;
-                border-radius: 5px;
-                overflow-x: auto;
-                page-break-inside: avoid;
-            }}
-            pre code {{
-                background-color: transparent;
-                color: inherit;
-                padding: 0;
-            }}
-            .header {{
-                text-align: center;
-                margin-bottom: 30px;
-                page-break-after: avoid;
-            }}
-            .footer {{
-                margin-top: 30px;
-                padding-top: 15px;
-                border-top: 1px solid #e2e8f0;
-                font-size: 10pt;
-                color: #666;
-            }}
-            strong {{
-                color: #1e293b;
-                font-weight: bold;
-            }}
-            hr {{
-                border: none;
-                border-top: 1px solid #e2e8f0;
-                margin: 20px 0;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <h1>🔍 APK 安全分析报告</h1>
-            <p><strong>APK 名称:</strong> {apk_name}</p>
-            <p><strong>生成时间:</strong> {datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')}</p>
-        </div>
-        <div class="content">
-            {html_content}
-        </div>
-        <div class="footer">
-            <p>本报告由 APK-Sentinel 自动生成 | Powered by Claude & JADX</p>
-        </div>
-    </body>
-    </html>
-    """
-
-    # 使用 weasyprint 生成 PDF
-    buffer = BytesIO()
-    HTML(string=html_template).write_pdf(buffer)
-    buffer.seek(0)
-    return buffer
 
 
 def main():
@@ -541,30 +406,33 @@ def main():
         if response.content:
             st.markdown(response.content)
 
-            # 下载 PDF 按钮
+            # 下载 Markdown 按钮
             st.markdown("---")
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                if st.button("📄 下载 PDF 报告", type="secondary", use_container_width=True):
-                    try:
-                        # 获取 APK 名称
-                        apk_name = Path(response.metadata.get("apk_path", "unknown")).stem
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        filename = f"apk_report_{apk_name}_{timestamp}.pdf"
+            # 获取 APK 名称和时间戳
+            apk_name = Path(response.metadata.get("apk_path", "unknown")).stem
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"apk_report_{apk_name}_{timestamp}.md"
 
-                        # 生成 PDF
-                        pdf_buffer = generate_pdf_report(response.content, apk_name)
+            # 添加元数据到 markdown
+            markdown_content = response.content
+            metadata = f"""---
+# APK 安全分析报告
 
-                        # 提供下载
-                        st.download_button(
-                            label="⬇️ 点击下载",
-                            data=pdf_buffer,
-                            file_name=filename,
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-                    except Exception as e:
-                        st.error(f"生成 PDF 失败: {e}")
+**APK 文件:** {apk_name}
+**生成时间:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Agent:** {response.metadata.get('model', 'unknown')}
+
+---
+
+"""
+
+            st.download_button(
+                label="📥 下载 Markdown 报告",
+                data=metadata + markdown_content,
+                file_name=filename,
+                mime="text/markdown",
+                use_container_width=True
+            )
         else:
             st.warning("⚠️ 报告内容为空")
             st.error("LLM 没有生成报告内容，请检查：")
