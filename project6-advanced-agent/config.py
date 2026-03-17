@@ -5,10 +5,50 @@ Project 6: 高级 Agent 应用
 """
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+@dataclass
+class MemorySettings:
+    """长记忆系统配置"""
+
+    # 向量存储配置
+    chroma_persist_dir: Path = field(
+        default_factory=lambda: Path("memory/chroma"),
+        metadata={"description": "Chroma DB 持久化目录"}
+    )
+
+    # Embedding 模型配置
+    embedding_model: str = field(
+        default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        metadata={"description": "支持中英文的轻量级模型"}
+    )
+
+    # 相似度检索配置
+    similarity_top_k: int = field(
+        default=5,
+        metadata={"description": "检索相似样本数量"}
+    )
+
+    similarity_threshold: float = field(
+        default=0.7,
+        metadata={"description": "相似度阈值"}
+    )
+
+    # 规则学习配置
+    enable_auto_learning: bool = field(
+        default=True,
+        metadata={"description": "是否启用自动规则学习"}
+    )
+
+    candidate_rules_dir: Path = field(
+        default_factory=lambda: Path("memory/pending_rules"),
+        metadata={"description": "候选规则存储目录"}
+    )
 
 
 @dataclass
@@ -37,6 +77,12 @@ class Settings:
     )
     memory_store_path: str = field(
         default_factory=lambda: os.getenv("MEMORY_STORE_PATH", "data/memory")
+    )
+
+    # ========== 长记忆系统配置 ==========
+    memory: MemorySettings = field(
+        default_factory=MemorySettings,
+        metadata={"description": "长记忆系统配置"}
     )
 
     # ========== 评估配置 ==========
