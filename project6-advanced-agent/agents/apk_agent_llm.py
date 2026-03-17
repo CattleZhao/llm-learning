@@ -17,6 +17,9 @@ from .report_parser import ReportParser
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# 导入长记忆系统
+from memory import get_vector_store, get_rule_learner
+
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,
@@ -136,6 +139,10 @@ class LLMAPKAnalysisAgent(BaseAgent):
         # 报告解析器
         self.report_parser = ReportParser()
 
+        # 初始化长记忆系统
+        self.vector_store = get_vector_store()
+        self.rule_learner = get_rule_learner()
+
     def think(
         self,
         input_text: str,
@@ -183,6 +190,25 @@ class LLMAPKAnalysisAgent(BaseAgent):
             self.total_output_tokens = history.get("output_tokens", 0)
             last_analysis_time = history.get("timestamp", "")
             self.on_status_update(f"📋 加载历史分析记录 (上次分析: {last_analysis_time})")
+
+        # 检索相似历史分析
+        if not history:
+            similar = self.vector_store.search_similar(
+                query=f"{Path(apk_path).name} APK analysis",
+                n_results=3
+            )
+
+            if similar:
+                similar_context = "\n\n".join([
+                    f"相似样本 {i+1}:\n包名: {s['metadata'].get('package', 'unknown')}\n"
+                    f"风险等级: {s['metadata'].get('risk_level', 'unknown')}\n"
+                    f"摘要: {s.get('content', '')[:200]}"
+                    for i, s in enumerate(similar)
+                ])
+                self.on_status_update(f"📚 找到 {len(similar)} 个相似历史样本")
+
+                # 注入到 System Prompt
+                self.system_prompt += f"\n\n参考历史分析：\n{similar_context}\n请参考这些相似样本的分析方式。"
 
         self.on_status_update(f"📁 开始分析: {Path(apk_path).name}")
 
@@ -233,6 +259,35 @@ class LLMAPKAnalysisAgent(BaseAgent):
                 output_tokens=self.total_output_tokens,
                 metadata=metadata
             )
+
+            # 存储分析结果到向量库
+            try:
+                self.vector_store.store_analysis(
+                    apk_hash=apk_hash,
+                    analysis_result=AgentResponse(
+                        content=final_response,
+                        metadata=metadata
+                    ),
+                    metadata=metadata
+                )
+                self.on_status_update("💾 分析结果已保存到长记忆")
+            except Exception as e:
+                logger.warning(f"Failed to store to vector store: {e}")
+
+            # 提取候选规则（如果启用了自动学习）
+            if settings.memory.enable_auto_learning:
+                try:
+                    candidates = self.rule_learner.extract_candidate_rules(
+                        AgentResponse(content=final_response, metadata=metadata)
+                    )
+
+                    if candidates:
+                        for candidate in candidates:
+                            self.rule_learner.save_to_pending(candidate)
+
+                        self.on_status_update(f"🎯 提取了 {len(candidates)} 条候选规则，请在 Web UI 中审核")
+                except Exception as e:
+                    logger.warning(f"Failed to extract candidate rules: {e}")
 
             return AgentResponse(
                 content=final_response,
