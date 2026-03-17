@@ -4,6 +4,7 @@
 使用 Chroma DB 存储 APK 分析结果的向量表示
 使用 Ollama API 生成 embedding（不需要 PyTorch）
 """
+import json
 import logging
 import time
 from pathlib import Path
@@ -135,12 +136,34 @@ class VectorStore:
 
         # 合并元数据
         final_metadata = metadata or {}
-        final_metadata.update({
+
+        # 清理 metadata - Chroma DB 只支持 str, int, float, bool
+        def clean_metadata(value: Any) -> Any:
+            """递归清理 metadata，只保留 Chroma 支持的类型"""
+            if isinstance(value, (str, int, float, bool)):
+                return value
+            elif isinstance(value, (dict, list)):
+                # 复杂类型转 JSON 字符串
+                try:
+                    return json.dumps(value, ensure_ascii=False)
+                except:
+                    return str(value)
+            else:
+                return str(value)
+
+        cleaned_metadata = {}
+        for key, value in final_metadata.items():
+            cleaned_metadata[key] = clean_metadata(value)
+
+        # 添加基本字段
+        cleaned_metadata.update({
             "apk_hash": apk_hash,
-            "risk_level": analysis_result.metadata.get("risk_level", "UNKNOWN"),
-            "package": analysis_result.metadata.get("package", ""),
+            "risk_level": str(analysis_result.metadata.get("risk_level", "UNKNOWN")),
+            "package": str(analysis_result.metadata.get("package", "")),
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S")
         })
+
+        final_metadata = cleaned_metadata
 
         # 使用 summary 或 content 生成 embedding
         text_to_embed = (
