@@ -275,6 +275,13 @@ class VectorStore:
         }
 
 
+_vector_store_singleton: Optional[VectorStore] = None
+
+
 def get_vector_store() -> VectorStore:
     """获取 VectorStore 单例"""
-    return VectorStore()
+    global _vector_store_singleton
+    if _vector_store_singleton is None:
+        _vector_store_singleton = VectorStore()
+        logger.info("VectorStore singleton created")
+    return _vector_store_singleton

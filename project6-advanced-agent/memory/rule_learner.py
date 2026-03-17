@@ -7,7 +7,7 @@ import json
 import logging
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from anthropic import Anthropic
 
 from config import get_settings
@@ -233,6 +233,13 @@ class RuleLearner:
         return False
 
 
+_rule_learner_singleton: Optional[RuleLearner] = None
+
+
 def get_rule_learner() -> RuleLearner:
     """获取 RuleLearner 单例"""
-    return RuleLearner()
+    global _rule_learner_singleton
+    if _rule_learner_singleton is None:
+        _rule_learner_singleton = RuleLearner()
+        logger.info("RuleLearner singleton created")
+    return _rule_learner_singleton
