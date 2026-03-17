@@ -22,10 +22,15 @@ class MemorySettings:
         metadata={"description": "Chroma DB 持久化目录"}
     )
 
-    # Embedding 模型配置
+    # Embedding 模型配置 (使用 Ollama)
     embedding_model: str = field(
-        default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-        metadata={"description": "支持中英文的轻量级模型"}
+        default_factory=lambda: os.getenv("EMBED_MODEL", "nomic-embed-text"),
+        metadata={"description": "Ollama embedding 模型名称"}
+    )
+
+    ollama_base_url: str = field(
+        default_factory=lambda: os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+        metadata={"description": "Ollama 服务地址"}
     )
 
     # 相似度检索配置

@@ -2,6 +2,7 @@
 向量存储模块
 
 使用 Chroma DB 存储 APK 分析结果的向量表示
+使用 Ollama API 生成 embedding（不需要 PyTorch）
 """
 import logging
 import time
@@ -9,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 import chromadb
 from chromadb.config import Settings as ChromaSettings
+import requests
 
 from agents.base import AgentResponse
 from config import get_settings
@@ -49,30 +51,18 @@ class VectorStore:
             metadata={"description": "APK analysis results"}
         )
 
-        # 初始化 embedding 模型 (延迟加载)
-        self.embedding_model = None
-        self._embedding_model_name = settings.memory.embedding_model
+        # Ollama 配置
+        self.ollama_base_url = settings.memory.ollama_base_url
+        self.embedding_model_name = settings.memory.embedding_model
 
         logger.info(f"VectorStore initialized at {self.persist_dir}")
-
-    def _get_embedding_model(self):
-        """延迟加载 embedding 模型"""
-        if self.embedding_model is None:
-            try:
-                from sentence_transformers import SentenceTransformer
-                self.embedding_model = SentenceTransformer(self._embedding_model_name)
-            except Exception as e:
-                logger.error(f"Failed to load embedding model: {e}")
-                raise RuntimeError(
-                    f"Failed to load sentence-transformers model '{self._embedding_model_name}'. "
-                    "Please ensure sentence-transformers is installed with PyTorch support. "
-                    "Try: pip install sentence-transformers torch"
-                )
-        return self.embedding_model
+        logger.info(f"Using Ollama embedding: {self.embedding_model_name} at {self.ollama_base_url}")
 
     def _embed_with_retry(self, text: str, max_retries: int = 3) -> List[float]:
         """
         生成 embedding，带重试机制
+
+        使用 Ollama API 生成 embedding，不需要 PyTorch
 
         Args:
             text: 输入文本
@@ -81,19 +71,43 @@ class VectorStore:
         Returns:
             embedding 向量
         """
+        url = f"{self.ollama_base_url}/api/embeddings"
+
         for attempt in range(max_retries):
             try:
-                model = self._get_embedding_model()
-                return model.encode(
-                    text,
-                    convert_to_numpy=True,
-                    show_progress_bar=False
-                ).tolist()
+                response = requests.post(
+                    url,
+                    json={
+                        "model": self.embedding_model_name,
+                        "prompt": text
+                    },
+                    timeout=30
+                )
+                response.raise_for_status()
+
+                result = response.json()
+                embedding = result.get("embedding")
+
+                if not embedding:
+                    raise ValueError(f"Ollama returned empty embedding: {result}")
+
+                return embedding
+
+            except requests.exceptions.ConnectionError as e:
+                if attempt == max_retries - 1:
+                    raise RuntimeError(
+                        f"Cannot connect to Ollama at {self.ollama_base_url}. "
+                        f"Please ensure Ollama is running and the model '{self.embedding_model_name}' is available. "
+                        f"Run: ollama pull {self.embedding_model_name}"
+                    ) from e
+                logger.warning(f"Ollama connection failed (attempt {attempt + 1}), retrying...")
+                time.sleep(2 ** attempt)
+
             except Exception as e:
                 if attempt == max_retries - 1:
                     logger.error(f"Embedding failed after {max_retries} attempts: {e}")
                     raise
-                logger.warning(f"Embedding failed (attempt {attempt + 1}), retrying...")
+                logger.warning(f"Embedding failed (attempt {attempt + 1}): {e}, retrying...")
                 time.sleep(2 ** attempt)
 
     def store_analysis(

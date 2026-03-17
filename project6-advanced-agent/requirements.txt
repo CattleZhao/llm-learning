@@ -34,5 +34,4 @@ mypy>=1.8.0
 
 # Long-term memory
 chromadb>=0.4.0
-sentence-transformers>=2.2.0
 PyPDF2>=3.0.0
