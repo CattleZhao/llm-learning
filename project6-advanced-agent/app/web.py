@@ -111,105 +111,114 @@ h1, h2, h3 {
 
 def show_history_view():
     """显示历史分析记录"""
-    from memory import get_vector_store
+    try:
+        from memory import get_vector_store
 
-    vector_store = get_vector_store()
+        vector_store = get_vector_store()
 
-    # 显示统计信息
-    stats = vector_store.get_stats()
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("📊 总分析数", stats["total_count"])
-    with col2:
-        st.metric("🔴 高风险样本", stats["high_risk_count"])
+        # 显示统计信息
+        stats = vector_store.get_stats()
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("📊 总分析数", stats["total_count"])
+        with col2:
+            st.metric("🔴 高风险样本", stats["high_risk_count"])
 
-    st.markdown("---")
+        st.markdown("---")
 
-    # 搜索历史
-    search_query = st.text_input("🔍 搜索相似分析")
+        # 搜索历史
+        search_query = st.text_input("🔍 搜索相似分析")
 
-    if search_query:
-        with st.spinner("搜索中..."):
-            results = vector_store.search_similar(search_query, n_results=5)
+        if search_query:
+            with st.spinner("搜索中..."):
+                results = vector_store.search_similar(search_query, n_results=5)
 
-        if results:
-            for i, result in enumerate(results):
-                with st.expander(
-                    f"{result['metadata'].get('package', 'unknown')} - "
-                    f"{result['metadata'].get('risk_level', 'UNKNOWN')}"
-                ):
-                    st.markdown(f"**摘要:** {result.get('content', '')[:300]}")
-                    st.caption(f"时间: {result['metadata'].get('timestamp', 'unknown')}")
-        else:
-            st.info("未找到相似记录")
+            if results:
+                for i, result in enumerate(results):
+                    with st.expander(
+                        f"{result['metadata'].get('package', 'unknown')} - "
+                        f"{result['metadata'].get('risk_level', 'UNKNOWN')}"
+                    ):
+                        st.markdown(f"**摘要:** {result.get('content', '')[:300]}")
+                        st.caption(f"时间: {result['metadata'].get('timestamp', 'unknown')}")
+            else:
+                st.info("未找到相似记录")
+    except Exception as e:
+        st.warning(f"⚠️ 长记忆功能暂不可用: {e}")
+        st.caption("请确保 Ollama 正在运行: `ollama serve`")
 
 
 def show_document_import():
     """文档导入界面"""
-    from memory import DocumentImporter, get_vector_store
+    try:
+        from memory import DocumentImporter, get_vector_store
 
-    vector_store = get_vector_store()
-    importer = DocumentImporter(vector_store=vector_store)
+        vector_store = get_vector_store()
+        importer = DocumentImporter(vector_store=vector_store)
 
-    uploaded_files = st.file_uploader(
-        "上传历史分析文档",
-        type=["pdf", "txt", "md"],
-        accept_multiple_files=True,
-        help="支持 PDF、TXT、MD 格式的历史分析文档"
-    )
+        uploaded_files = st.file_uploader(
+            "上传历史分析文档",
+            type=["pdf", "txt", "md"],
+            accept_multiple_files=True,
+            help="支持 PDF、TXT、MD 格式的历史分析文档"
+        )
 
-    if uploaded_files:
-        st.info(f"已选择 {len(uploaded_files)} 个文件")
+        if uploaded_files:
+            st.info(f"已选择 {len(uploaded_files)} 个文件")
 
-        if st.button("📥 开始导入", type="primary"):
-            progress_bar = st.progress(0)
-            success_count = 0
+            if st.button("📥 开始导入", type="primary"):
+                progress_bar = st.progress(0)
+                success_count = 0
 
-            uploads_dir = Path("uploads")
-            uploads_dir.mkdir(exist_ok=True)
+                uploads_dir = Path("uploads")
+                uploads_dir.mkdir(exist_ok=True)
 
-            for i, uploaded_file in enumerate(uploaded_files):
-                # 保存临时文件
-                temp_path = uploads_dir / uploaded_file.name
-                with open(temp_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+                for i, uploaded_file in enumerate(uploaded_files):
+                    # 保存临时文件
+                    temp_path = uploads_dir / uploaded_file.name
+                    with open(temp_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
 
-                # 导入
-                try:
-                    with st.spinner(f"处理 {uploaded_file.name}..."):
-                        if uploaded_file.name.endswith(".pdf"):
-                            importer.import_pdf(str(temp_path))
-                        else:
-                            importer.import_text_file(str(temp_path))
+                    # 导入
+                    try:
+                        with st.spinner(f"处理 {uploaded_file.name}..."):
+                            if uploaded_file.name.endswith(".pdf"):
+                                importer.import_pdf(str(temp_path))
+                            else:
+                                importer.import_text_file(str(temp_path))
 
-                    success_count += 1
-                    st.success(f"✅ {uploaded_file.name} 导入成功")
+                        success_count += 1
+                        st.success(f"✅ {uploaded_file.name} 导入成功")
 
-                except Exception as e:
-                    st.error(f"❌ {uploaded_file.name} 导入失败: {e}")
+                    except Exception as e:
+                        st.error(f"❌ {uploaded_file.name} 导入失败: {e}")
 
-                # 清理临时文件
-                temp_path.unlink()
+                    # 清理临时文件
+                    temp_path.unlink()
 
-                progress_bar.progress((i + 1) / len(uploaded_files))
+                    progress_bar.progress((i + 1) / len(uploaded_files))
 
-            st.info(f"导入完成: {success_count}/{len(uploaded_files)} 成功")
+                st.info(f"导入完成: {success_count}/{len(uploaded_files)} 成功")
+    except Exception as e:
+        st.warning(f"⚠️ 文档导入功能暂不可用: {e}")
+        st.caption("请确保 Ollama 正在运行: `ollama serve`")
 
 
 def show_rule_review():
     """规则审核界面"""
-    from memory import get_rule_learner
+    try:
+        from memory import get_rule_learner
 
-    rule_learner = get_rule_learner()
-    candidates = rule_learner.load_pending_rules()
+        rule_learner = get_rule_learner()
+        candidates = rule_learner.load_pending_rules()
 
-    if not candidates:
-        st.info("暂无待审核规则")
-        return
+        if not candidates:
+            st.info("暂无待审核规则")
+            return
 
-    st.info(f"有 {len(candidates)} 条候选规则待审核")
+        st.info(f"有 {len(candidates)} 条候选规则待审核")
 
-    for candidate in candidates:
+        for candidate in candidates:
         rule_id = candidate.get("id", "unknown")
 
         with st.expander(f"📋 {candidate.get('name', '未命名规则')}"):
@@ -263,6 +272,9 @@ def show_rule_review():
                         st.rerun()
                     else:
                         st.error("删除失败")
+    except Exception as e:
+        st.warning(f"⚠️ 规则审核功能暂不可用: {e}")
+        st.caption("请确保 Ollama 正在运行: `ollama serve`")
 
 
 def main():
