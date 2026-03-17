@@ -93,6 +93,7 @@ class LLMAPKAnalysisAgent(BaseAgent):
         self.api_key = anthropic_api_key or settings.anthropic_api_key
         self.model = model
         self.system_prompt = system_prompt or USER_SYSTEM_PROMPT
+        self.settings = settings  # 保存为实例变量
 
         # 初始化 Anthropic 客户端
         self.client = Anthropic(api_key=self.api_key)
@@ -158,11 +159,8 @@ class LLMAPKAnalysisAgent(BaseAgent):
         Returns:
             AgentResponse: 分析结果
         """
-        # 获取配置
-        settings = get_settings()
-
         # 提取 APK 路径
-        apk_path = self._extract_apk_path(input_text, context)
+        apk_path = self.__extract_apk_path(input_text, context)
 
         if not apk_path:
             return AgentResponse(
@@ -278,7 +276,7 @@ class LLMAPKAnalysisAgent(BaseAgent):
                 logger.warning(f"Failed to store to vector store: {e}")
 
             # 提取候选规则（如果启用了自动学习）
-            if settings.memory.enable_auto_learning:
+            if self.settings.memory.enable_auto_learning:
                 try:
                     candidates = self.rule_learner.extract_candidate_rules(
                         AgentResponse(content=final_response, metadata=metadata)
