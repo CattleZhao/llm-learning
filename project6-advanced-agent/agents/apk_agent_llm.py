@@ -158,6 +158,9 @@ class LLMAPKAnalysisAgent(BaseAgent):
         Returns:
             AgentResponse: 分析结果
         """
+        # 获取配置
+        settings = get_settings()
+
         # 提取 APK 路径
         apk_path = self._extract_apk_path(input_text, context)
 
