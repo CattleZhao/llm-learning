@@ -222,56 +222,56 @@ def show_rule_review():
             rule_id = candidate.get("id", "unknown")
 
             with st.expander(f"📋 {candidate.get('name', '未命名规则')}"):
-            # 显示规则详情
-            col1, col2 = st.columns(2)
+                # 显示规则详情
+                col1, col2 = st.columns(2)
 
-            with col1:
-                st.write("**类别:**", candidate.get("category", "unknown"))
-                st.write("**严重程度:**", candidate.get("severity", "unknown"))
+                with col1:
+                    st.write("**类别:**", candidate.get("category", "unknown"))
+                    st.write("**严重程度:**", candidate.get("severity", "unknown"))
 
-            with col2:
-                pattern = candidate.get("pattern", "无")
-                if pattern and pattern != "无":
-                    st.code(pattern, language="regex")
-                else:
-                    st.write("**模式:** 无")
-
-            st.markdown("**描述:**")
-            st.markdown(candidate.get("description", ""))
-
-            if candidate.get("reason"):
-                st.markdown("**理由:**")
-                st.caption(candidate["reason"])
-
-            indicators = candidate.get("indicators", {})
-            if indicators and (indicators.get("domains") or indicators.get("ips") or indicators.get("urls")):
-                st.markdown("**威胁指标:**")
-                if indicators.get("domains"):
-                    st.write("- 域名:", ", ".join(indicators["domains"]))
-                if indicators.get("ips"):
-                    st.write("- IP:", ", ".join(indicators["ips"]))
-                if indicators.get("urls"):
-                    st.write("- URL:", ", ".join(indicators["urls"]))
-
-            # 审核按钮
-            btn_col1, btn_col2 = st.columns(2)
-
-            with btn_col1:
-                if st.button("✅ 批准", key=f"approve_{rule_id}"):
-                    try:
-                        rule_learner.approve_rule(rule_id)
-                        st.success("规则已添加到规则库")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"批准失败: {e}")
-
-            with btn_col2:
-                if st.button("❌ 拒绝", key=f"reject_{rule_id}"):
-                    if rule_learner.reject_rule(rule_id):
-                        st.success("规则已删除")
-                        st.rerun()
+                with col2:
+                    pattern = candidate.get("pattern", "无")
+                    if pattern and pattern != "无":
+                        st.code(pattern, language="regex")
                     else:
-                        st.error("删除失败")
+                        st.write("**模式:** 无")
+
+                st.markdown("**描述:**")
+                st.markdown(candidate.get("description", ""))
+
+                if candidate.get("reason"):
+                    st.markdown("**理由:**")
+                    st.caption(candidate["reason"])
+
+                indicators = candidate.get("indicators", {})
+                if indicators and (indicators.get("domains") or indicators.get("ips") or indicators.get("urls")):
+                    st.markdown("**威胁指标:**")
+                    if indicators.get("domains"):
+                        st.write("- 域名:", ", ".join(indicators["domains"]))
+                    if indicators.get("ips"):
+                        st.write("- IP:", ", ".join(indicators["ips"]))
+                    if indicators.get("urls"):
+                        st.write("- URL:", ", ".join(indicators["urls"]))
+
+                # 审核按钮
+                btn_col1, btn_col2 = st.columns(2)
+
+                with btn_col1:
+                    if st.button("✅ 批准", key=f"approve_{rule_id}"):
+                        try:
+                            rule_learner.approve_rule(rule_id)
+                            st.success("规则已添加到规则库")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"批准失败: {e}")
+
+                with btn_col2:
+                    if st.button("❌ 拒绝", key=f"reject_{rule_id}"):
+                        if rule_learner.reject_rule(rule_id):
+                            st.success("规则已删除")
+                            st.rerun()
+                        else:
+                            st.error("删除失败")
     except Exception as e:
         st.warning(f"⚠️ 规则审核功能暂不可用: {e}")
         st.caption("请确保 Ollama 正在运行: `ollama serve`")
