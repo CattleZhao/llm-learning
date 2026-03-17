@@ -219,9 +219,9 @@ def show_rule_review():
         st.info(f"有 {len(candidates)} 条候选规则待审核")
 
         for candidate in candidates:
-        rule_id = candidate.get("id", "unknown")
+            rule_id = candidate.get("id", "unknown")
 
-        with st.expander(f"📋 {candidate.get('name', '未命名规则')}"):
+            with st.expander(f"📋 {candidate.get('name', '未命名规则')}"):
             # 显示规则详情
             col1, col2 = st.columns(2)
 
