@@ -495,13 +495,15 @@ def main():
                 import os
                 import re
 
-                upload_dir = Path("uploads")
-                upload_dir.mkdir(exist_ok=True)
+                # 使用绝对路径
+                upload_dir = Path("uploads").resolve()
+                upload_dir.mkdir(parents=True, exist_ok=True)
 
                 # 清理文件名：移除或替换 Windows 不允许的字符
                 safe_name = re.sub(r'[<>:"/\\|?*]', '_', uploaded_file.name)
+
                 # 使用 os.path.join 确保正确的路径分隔符
-                apk_path = os.path.join(upload_dir, safe_name)
+                apk_path = os.path.join(str(upload_dir), safe_name)
 
                 # 调试信息
                 st.write(f"调试: upload_dir={upload_dir}, safe_name={safe_name}, apk_path={apk_path}")
