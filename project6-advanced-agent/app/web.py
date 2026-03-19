@@ -496,8 +496,24 @@ def main():
 
             # 清理文件名：移除或替换特殊字符
             import re
+            import time
             safe_name = re.sub(r'[<>:"/\\|?*()\[\]{}]', '_', uploaded_file.name)
+
+            # 添加时间戳避免文件名冲突和锁定问题
+            name_without_ext = Path(safe_name).stem
+            ext = Path(safe_name).suffix
+            timestamp = int(time.time())
+            safe_name = f"{name_without_ext}_{timestamp}{ext}"
+
             apk_path = upload_dir / safe_name
+
+            # 如果文件已存在，先删除（Windows 文件锁定问题）
+            if apk_path.exists():
+                try:
+                    apk_path.unlink()
+                except:
+                    pass
+
             with open(str(apk_path), "wb") as f:
                 f.write(uploaded_file.getvalue())
 
