@@ -10,9 +10,12 @@ APK 恶意行为分析 - Web UI
 """
 import streamlit as st
 import sys
+import logging
 from pathlib import Path
 import time
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -580,6 +583,15 @@ def main():
                         update_status(f"📄 报告内容长度: {len(response.content) if response.content else 0}")
                         if hasattr(response, 'metadata'):
                             update_status(f"📊 风险等级: {response.metadata.get('risk_level', 'unknown')}")
+
+                        # 删除上传的 APK 文件
+                        try:
+                            apk_file = Path(apk_path_abs)
+                            if apk_file.exists():
+                                apk_file.unlink()
+                                update_status("🗑️ 已删除上传的 APK 文件")
+                        except Exception as e:
+                            logger.warning(f"删除 APK 文件失败: {e}")
 
                         st.rerun()
 

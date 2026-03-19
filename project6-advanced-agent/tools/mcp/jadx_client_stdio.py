@@ -58,6 +58,9 @@ class StdioMCPClient:
         self._is_connected = False
         self._connection_lock = threading.Lock()
 
+        # JADX-GUI 进程（用于关闭）
+        self._jadx_gui_process: Optional[subprocess.Popen] = None
+
     def _find_jadx_gui(self) -> str:
         """查找 jadx-gui 可执行文件"""
         is_windows = platform.system() == "Windows"
@@ -315,8 +318,31 @@ class StdioMCPClient:
             return []
 
     def close(self):
-        """关闭 MCP Server"""
+        """关闭 MCP Server 和 JADX-GUI"""
         self._is_connected = False
+
+        # 关闭 JADX-GUI 进程
+        if self._jadx_gui_process:
+            try:
+                import subprocess
+                if platform.system() == "Windows":
+                    # Windows: 使用 taskkill 强制关闭
+                    subprocess.run(
+                        ['taskkill', '/F', '/IM', 'jadx-gui.exe'],
+                        capture_output=True,
+                        stderr=subprocess.DEVNULL
+                    )
+                else:
+                    # Unix/Linux: 尝试关闭进程
+                    self._jadx_gui_process.terminate()
+                    try:
+                        self._jadx_gui_process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        self._jadx_gui_process.kill()
+                self._jadx_gui_process = None
+                self.on_status_update("✅ JADX-GUI 已关闭")
+            except Exception as e:
+                logger.debug(f"关闭 JADX-GUI 时出错: {e}")
 
         # 终止 MCP Server 进程
         if self._process:
@@ -367,21 +393,24 @@ class StdioMCPClient:
 
         try:
             def launch_gui():
+                nonlocal self
                 try:
                     if is_windows:
-                        subprocess.Popen(
+                        proc = subprocess.Popen(
                             cmd,
                             stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL,
                             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
                         )
                     else:
-                        subprocess.Popen(
+                        proc = subprocess.Popen(
                             cmd,
                             stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL,
                             start_new_session=True
                         )
+                    # 保存进程引用以便后续关闭
+                    self._jadx_gui_process = proc
                 except Exception as e:
                     logger.error(f"启动 JADX-GUI 失败: {e}")
 
