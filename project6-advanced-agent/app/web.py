@@ -584,7 +584,14 @@ def main():
                         if hasattr(response, 'metadata'):
                             update_status(f"📊 风险等级: {response.metadata.get('risk_level', 'unknown')}")
 
-                        # 删除上传的 APK 文件
+                        # 关闭 JADX-GUI 和 MCP Server（先关闭才能删除文件）
+                        try:
+                            agent.mcp_client.close()
+                            update_status("✅ JADX-GUI 和 MCP Server 已关闭")
+                        except Exception as e:
+                            logger.warning(f"关闭 MCP 客户端失败: {e}")
+
+                        # 删除上传的 APK 文件（关闭后才能删除）
                         try:
                             apk_file = Path(apk_path_abs)
                             if apk_file.exists():
