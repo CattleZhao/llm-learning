@@ -481,6 +481,7 @@ def main():
     )
 
     apk_path = None
+    uploaded_file = None  # 初始化为 None，避免 NameError
 
     if upload_method == "上传文件":
         uploaded_file = st.file_uploader(
@@ -490,18 +491,32 @@ def main():
         )
 
         if uploaded_file is not None:
-            upload_dir = Path("uploads")
-            upload_dir.mkdir(exist_ok=True)
+            try:
+                upload_dir = Path("uploads")
+                upload_dir.mkdir(exist_ok=True)
 
-            # 清理文件名：移除或替换特殊字符
-            import re
-            safe_name = re.sub(r'[<>:"/\\|?*()\[\]{}]', '_', uploaded_file.name)
-            apk_path = upload_dir / safe_name
-            with open(str(apk_path), "wb") as f:
-                f.write(uploaded_file.getvalue())
+                # 清理文件名：移除或替换特殊字符
+                import re
+                safe_name = re.sub(r'[<>:"/\\|?*()\[\]{}]', '_', uploaded_file.name)
+                apk_path = upload_dir / safe_name
 
-            st.success(f"✅ 文件已上传: {uploaded_file.name}")
-            st.caption(f"文件大小: {uploaded_file.size / 1024:.1f} KB")
+                # 获取文件内容
+                file_content = uploaded_file.getvalue()
+                if not file_content:
+                    st.error("❌ 上传的文件为空")
+                    apk_path = None
+                else:
+                    with open(str(apk_path), "wb") as f:
+                        f.write(file_content)
+
+                    st.success(f"✅ 文件已上传: {uploaded_file.name}")
+                    # 安全获取文件大小
+                    file_size = getattr(uploaded_file, 'size', len(file_content))
+                    if file_size and file_size > 0:
+                        st.caption(f"文件大小: {file_size / 1024:.1f} KB")
+            except Exception as e:
+                st.error(f"❌ 文件上传失败: {e}")
+                apk_path = None
 
     else:
         apk_path = st.text_input(
@@ -547,9 +562,11 @@ def main():
                     start_time = time.time()
 
                     try:
+                        # 确保使用绝对路径
+                        apk_path_abs = str(Path(apk_path).resolve())
                         response = agent.think(
-                            f"请分析 APK 文件: {apk_path}",
-                            context={"apk_path": str(apk_path)}
+                            f"请分析 APK 文件: {apk_path_abs}",
+                            context={"apk_path": apk_path_abs}
                         )
 
                         elapsed_time = time.time() - start_time
@@ -594,7 +611,11 @@ def main():
             # 下载 Markdown 按钮
             st.markdown("---")
             # 获取 APK 名称和时间戳
-            apk_name = Path(response.metadata.get("apk_path", "unknown")).stem
+            apk_path_str = response.metadata.get("apk_path", "unknown")
+            if apk_path_str and apk_path_str != "unknown":
+                apk_name = Path(str(apk_path_str)).stem
+            else:
+                apk_name = "unknown"
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"apk_report_{apk_name}_{timestamp}.md"
 
