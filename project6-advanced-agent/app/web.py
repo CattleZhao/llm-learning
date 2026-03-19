@@ -492,7 +492,6 @@ def main():
 
         if uploaded_file is not None:
             try:
-                import os
                 import re
 
                 # 使用绝对路径
@@ -502,11 +501,14 @@ def main():
                 # 清理文件名：移除或替换 Windows 不允许的字符
                 safe_name = re.sub(r'[<>:"/\\|?*]', '_', uploaded_file.name)
 
-                # 使用 os.path.join 确保正确的路径分隔符
-                apk_path = os.path.join(str(upload_dir), safe_name)
+                # 使用 pathlib 的 / 操作符创建路径
+                apk_path = upload_dir / safe_name
 
                 # 调试信息
-                st.write(f"调试: upload_dir={upload_dir}, safe_name={safe_name}, apk_path={apk_path}")
+                st.write(f"调试: upload_dir={upload_dir}")
+                st.write(f"调试: safe_name={safe_name}")
+                st.write(f"调试: apk_path={apk_path}")
+                st.write(f"调试: apk_path 类型={type(apk_path)}")
 
                 # 获取文件内容
                 file_content = uploaded_file.getvalue()
@@ -514,8 +516,8 @@ def main():
                     st.error("❌ 上传的文件为空")
                     apk_path = None
                 else:
-                    with open(apk_path, "wb") as f:
-                        f.write(file_content)
+                    # 使用 pathlib 的 write_bytes 方法
+                    apk_path.write_bytes(file_content)
 
                     st.success(f"✅ 文件已上传: {uploaded_file.name}")
                     # 安全获取文件大小
