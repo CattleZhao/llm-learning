@@ -491,45 +491,18 @@ def main():
         )
 
         if uploaded_file is not None:
-            try:
-                import re
+            upload_dir = Path("uploads")
+            upload_dir.mkdir(exist_ok=True)
 
-                # 使用绝对路径
-                upload_dir = Path("uploads").resolve()
-                upload_dir.mkdir(parents=True, exist_ok=True)
+            # 清理文件名：移除或替换特殊字符
+            import re
+            safe_name = re.sub(r'[<>:"/\\|?*()\[\]{}]', '_', uploaded_file.name)
+            apk_path = upload_dir / safe_name
+            with open(str(apk_path), "wb") as f:
+                f.write(uploaded_file.getvalue())
 
-                # 清理文件名：移除或替换 Windows 不允许的字符
-                safe_name = re.sub(r'[<>:"/\\|?*]', '_', uploaded_file.name)
-
-                # 使用 pathlib 的 / 操作符创建路径
-                apk_path = upload_dir / safe_name
-
-                # 调试信息
-                st.write(f"调试: upload_dir={upload_dir}")
-                st.write(f"调试: safe_name={safe_name}")
-                st.write(f"调试: apk_path={apk_path}")
-                st.write(f"调试: apk_path 类型={type(apk_path)}")
-
-                # 获取文件内容
-                file_content = uploaded_file.getvalue()
-                if not file_content:
-                    st.error("❌ 上传的文件为空")
-                    apk_path = None
-                else:
-                    # 使用 pathlib 的 write_bytes 方法
-                    apk_path.write_bytes(file_content)
-
-                    st.success(f"✅ 文件已上传: {uploaded_file.name}")
-                    # 安全获取文件大小
-                    file_size = getattr(uploaded_file, 'size', len(file_content))
-                    if file_size and file_size > 0:
-                        st.caption(f"文件大小: {file_size / 1024:.1f} KB")
-            except Exception as e:
-                import traceback
-                st.error(f"❌ 文件上传失败: {e}")
-                with st.expander("查看详细错误"):
-                    st.code(traceback.format_exc(), language="python")
-                apk_path = None
+            st.success(f"✅ 文件已上传: {uploaded_file.name}")
+            st.caption(f"文件大小: {uploaded_file.size / 1024:.1f} KB")
 
     else:
         apk_path = st.text_input(
@@ -623,14 +596,20 @@ def main():
 
             # 下载 Markdown 按钮
             st.markdown("---")
-            # 获取 APK 名称和时间戳
-            apk_path_str = response.metadata.get("apk_path", "unknown")
-            if apk_path_str and apk_path_str != "unknown":
-                apk_name = Path(str(apk_path_str)).stem
-            else:
-                apk_name = "unknown"
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"apk_report_{apk_name}_{timestamp}.md"
+            try:
+                # 获取 APK 名称和时间戳
+                apk_path_str = response.metadata.get("apk_path", "unknown")
+                if apk_path_str and apk_path_str != "unknown":
+                    apk_name = Path(str(apk_path_str)).stem
+                else:
+                    apk_name = "unknown"
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"apk_report_{apk_name}_{timestamp}.md"
+            except Exception as e:
+                st.error(f"生成文件名失败: {e}")
+                apk_name = "report"
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"apk_report_{timestamp}.md"
 
             # 添加元数据到 markdown
             markdown_content = response.content
