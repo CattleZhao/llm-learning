@@ -515,7 +515,10 @@ def main():
                     if file_size and file_size > 0:
                         st.caption(f"文件大小: {file_size / 1024:.1f} KB")
             except Exception as e:
+                import traceback
                 st.error(f"❌ 文件上传失败: {e}")
+                with st.expander("查看详细错误"):
+                    st.code(traceback.format_exc(), language="python")
                 apk_path = None
 
     else:
