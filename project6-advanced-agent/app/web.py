@@ -176,8 +176,8 @@ def show_document_import():
                 for i, uploaded_file in enumerate(uploaded_files):
                     # 保存临时文件
                     temp_path = uploads_dir / uploaded_file.name
-                    with open(temp_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
+                    with open(str(temp_path), "wb") as f:
+                        f.write(uploaded_file.getvalue())
 
                     # 导入
                     try:
@@ -493,9 +493,12 @@ def main():
             upload_dir = Path("uploads")
             upload_dir.mkdir(exist_ok=True)
 
-            apk_path = upload_dir / uploaded_file.name
-            with open(apk_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
+            # 清理文件名：移除或替换特殊字符
+            import re
+            safe_name = re.sub(r'[<>:"/\\|?*()\[\]{}]', '_', uploaded_file.name)
+            apk_path = upload_dir / safe_name
+            with open(str(apk_path), "wb") as f:
+                f.write(uploaded_file.getvalue())
 
             st.success(f"✅ 文件已上传: {uploaded_file.name}")
             st.caption(f"文件大小: {uploaded_file.size / 1024:.1f} KB")
