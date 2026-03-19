@@ -1,0 +1,193 @@
+<mxfile host="app.diagrams.net" modified="2026-03-19T00:00:00.000Z" agent="5.0" version="24.0.0">
+  <diagram name="Data Flow" id="data-flow">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="Project 6: APK Malicious Behavior Analysis System&#xa;Data Flow Diagram" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="234.5" y="20" width="700" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Input: APK File -->
+        <mxCell id="apk-input" value="APK File&#xa;&#xa;User uploads&#xa;or provides path" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="100" width="160" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- JADX Decompilation -->
+        <mxCell id="jadx-decompile" value="JADX Decompilation&#xa;&#xa;- Open APK in JADX-GUI&#xa;- Extract source code&#xa;- Parse manifest" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="300" y="100" width="200" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- MCP Server -->
+        <mxCell id="mcp-server" value="MCP Server&#xa;&#xa;- Expose JADX tools&#xa;- Handle tool calls&#xa;- Return analysis data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="560" y="100" width="200" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Agent Analysis -->
+        <mxCell id="agent-analysis" value="Agent Analysis&#xa;&#xa;- Call MCP tools&#xa;- Match rules&#xa;- Analyze patterns" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="820" y="100" width="200" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow 1: APK to JADX -->
+        <mxCell id="flow1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#b85450;" edge="1" parent="1" source="apk-input" target="jadx-decompile">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow1-label" value="1. Load APK" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow1">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Arrow 2: JADX to MCP -->
+        <mxCell id="flow2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#d79b00;" edge="1" parent="1" source="jadx-decompile" target="mcp-server">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow2-label" value="2. HTTP Communication" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow2">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Arrow 3: MCP to Agent -->
+        <mxCell id="flow3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#d6b656;" edge="1" parent="1" source="mcp-server" target="agent-analysis">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow3-label" value="3. MCP Tool Calls (stdio)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow3">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Analysis Results Storage -->
+        <mxCell id="analysis-results" value="Analysis Results&#xa;&#xa;- Manifest data&#xa;- Code paths&#xa;- Network info&#xa;- API calls&#xa;- Strings" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="820" y="240" width="200" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: Agent to Results -->
+        <mxCell id="flow4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#9673a6;" edge="1" parent="1" source="agent-analysis" target="analysis-results">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow4-label" value="4. Collect Data" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow4">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Chroma DB (Long Memory) -->
+        <mxCell id="chroma-db" value="Chroma DB&#xa;(Long Memory)&#xa;&#xa;- Store analysis vectors&#xa;- Similarity search&#xa;- Historical patterns" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="560" y="240" width="200" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: Results to Chroma -->
+        <mxCell id="flow5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#82b366;dashed=1;" edge="1" parent="1" source="analysis-results" target="chroma-db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow5-label" value="5. Store Vectors" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow5">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Rule Base -->
+        <mxCell id="rule-base" value="Rule Base&#xa;&#xa;- Package rules&#xa;- URL blacklist&#xa;- Custom rules&#xa;- Malware patterns" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="300" y="240" width="200" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: Rule Base to Agent -->
+        <mxCell id="flow6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#666666;dashed=1;" edge="1" parent="1" source="rule-base" target="agent-analysis">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="400" y="200" />
+              <mxPoint x="400" y="180" />
+              <mxPoint x="920" y="180" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="flow6-label" value="6. Match Rules" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow6">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Matching Engine -->
+        <mxCell id="match-engine" value="Matching Engine&#xa;&#xa;- Regex patterns&#xa;- URL matching&#xa;- Malware signatures&#xa;- Risk calculation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="80" y="240" width="200" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: Results to Matching -->
+        <mxCell id="flow7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#d6b656;" edge="1" parent="1" source="analysis-results" target="match-engine">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="920" y="320" />
+              <mxPoint x="920" y="420" />
+              <mxPoint x="180" y="420" />
+              <mxPoint x="180" y="380" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="flow7-label" value="7. Pattern Matching" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow7">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Final Report -->
+        <mxCell id="final-report" value="Security Report&#xa;&#xa;- Risk level&#xa;- Findings list&#xa;- Mitigation&#xa;- Recommendations" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="420" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: Matching to Report -->
+        <mxCell id="flow8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#b85450;" edge="1" parent="1" source="match-engine" target="final-report">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow8-label" value="8. Generate Report" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow8">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- History Manager -->
+        <mxCell id="history-manager" value="History Manager&#xa;&#xa;- Save analysis&#xa;- Load previous&#xa;- Track tokens" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="300" y="420" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: Report to History -->
+        <mxCell id="flow9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#6c8ebf;" edge="1" parent="1" source="final-report" target="history-manager">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow9-label" value="9. Save History" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow9">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- User Display -->
+        <mxCell id="user-display" value="User Display&#xa;&#xa;- Web UI&#xa;- Markdown report&#xa;- Download option" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="560" y="420" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: History to Display -->
+        <mxCell id="flow10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#9673a6;" edge="1" parent="1" source="history-manager" target="user-display">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow10-label" value="10. Display" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow10">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend-box" value="Data Flow Legend" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="80" y="580" width="940" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-content" value="Solid Red: APK Input Path&#xa;Solid Orange/Yellow: Analysis Path&#xa;Solid Green: Memory Storage&#xa;Dashed Lines: Rule Matching &amp; Reference&#xa;Numbers 1-10: Flow Sequence" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;" vertex="1" parent="legend-box">
+          <mxGeometry x="20" y="40" width="900" height="60" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

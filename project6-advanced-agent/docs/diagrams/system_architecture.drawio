@@ -1,0 +1,157 @@
+<mxfile host="app.diagrams.net" modified="2026-03-19T00:00:00.000Z" agent="5.0" version="24.0.0">
+  <diagram name="System Architecture" id="system-architecture">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="Project 6: APK Malicious Behavior Analysis System&#xa;System Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="234.5" y="20" width="700" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Layer 1: Web UI Layer -->
+        <mxCell id="web-layer" value="Web UI Layer (Streamlit)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="80" y="100" width="1000" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="web-ui" value="Web UI (Streamlit)&#xa;- File Upload&#xa;- Configuration&#xa;- Report Display" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;verticalAlign=top;" vertex="1" parent="web-layer">
+          <mxGeometry x="20" y="40" width="220" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="user-browser" value="User Browser&#xa;- Chrome/Firefox&#xa;- Access via localhost:8501" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;verticalAlign=top;" vertex="1" parent="web-layer">
+          <mxGeometry x="280" y="40" width="200" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="status-display" value="Status Display&#xa;- Tool Call Progress&#xa;- Analysis Status&#xa;- Token Statistics" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;verticalAlign=top;" vertex="1" parent="web-layer">
+          <mxGeometry x="520" y="40" width="220" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="report-viewer" value="Report Viewer&#xa;- Markdown Format&#xa;- Download Reports&#xa;- Debug Info" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;verticalAlign=top;" vertex="1" parent="web-layer">
+          <mxGeometry x="760" y="40" width="200" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Layer 2: Agent Layer -->
+        <mxCell id="agent-layer" value="Agent Layer (APK Analysis Agent + LLM)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="80" y="260" width="1000" height="180" as="geometry" />
+        </mxCell>
+
+        <mxCell id="base-agent" value="BaseAgent&#xa;- Abstract base class&#xa;- Core agent interface" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;verticalAlign=top;" vertex="1" parent="agent-layer">
+          <mxGeometry x="20" y="40" width="140" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="apk-agent" value="APKAnalysisAgent&#xa;(Hardcoded Flow)&#xa;&#xa;- 9-step analysis&#xa;- Deterministic output&#xa;- Easy debugging" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;verticalAlign=top;" vertex="1" parent="agent-layer">
+          <mxGeometry x="180" y="40" width="200" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="llm-agent" value="LLMAPKAnalysisAgent&#xa;(LLM-Driven)&#xa;&#xa;- LLM decides tools&#xa;- Flexible analysis&#xa;- Complex reasoning" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;verticalAlign=top;" vertex="1" parent="agent-layer">
+          <mxGeometry x="400" y="40" width="200" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="anthropic-claude" value="Anthropic Claude&#xa;- Function Calling&#xa;- Tool Selection&#xa;- Report Generation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;verticalAlign=top;" vertex="1" parent="agent-layer">
+          <mxGeometry x="620" y="40" width="180" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="memory-components" value="Memory Components&#xa;&#xa;- HistoryManager&#xa;- VectorStore&#xa;- RuleLearner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;verticalAlign=top;" vertex="1" parent="agent-layer">
+          <mxGeometry x="820" y="40" width="160" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Layer 3: Tools Layer -->
+        <mxCell id="tools-layer" value="Tools Layer (MCP Server + JADX)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="80" y="480" width="1000" height="140" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mcp-client" value="StdioMCPClient&#xa;&#xa;- MCP Protocol&#xa;- stdio communication&#xa;- Tool execution" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;verticalAlign=top;" vertex="1" parent="tools-layer">
+          <mxGeometry x="20" y="40" width="180" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mcp-server" value="JADX MCP Server&#xa;&#xa;- HTTP endpoint&#xa;- Tool registry&#xa;- JSON-RPC" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;verticalAlign=top;" vertex="1" parent="tools-layer">
+          <mxGeometry x="220" y="40" width="200" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="jadx-gui" value="JADX-GUI&#xa;&#xa;- APK decompilation&#xa;- Plugin host&#xa;- HTTP server" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;verticalAlign=top;" vertex="1" parent="tools-layer">
+          <mxGeometry x="440" y="40" width="180" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="jadx-plugin" value="JADX AI MCP Plugin&#xa;&#xa;- Tool implementation&#xa;- JADX API wrapper&#xa;- Port 8650" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;verticalAlign=top;" vertex="1" parent="tools-layer">
+          <mxGeometry x="640" y="40" width="200" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="apk-file" value="APK File&#xa;&#xa;- Android app&#xa;- Input data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;verticalAlign=top;" vertex="1" parent="tools-layer">
+          <mxGeometry x="860" y="40" width="120" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Arrows: Layer 1 to Layer 2 -->
+        <mxCell id="arrow1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="web-ui" target="apk-agent">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="200" y="240" as="sourcePoint" />
+            <mxPoint x="400" y="240" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="arrow1-label" value="HTTP Request" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="arrow1">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="arrow2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="web-ui" target="llm-agent">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow2-label" value="HTTP Request" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="arrow2">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Arrows: Layer 2 to Layer 3 -->
+        <mxCell id="arrow3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="apk-agent" target="mcp-client">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow3-label" value="MCP Call (stdio)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="arrow3">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="arrow4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="llm-agent" target="mcp-client">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow4-label" value="MCP Call (stdio)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="arrow4">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Arrows: MCP to JADX -->
+        <mxCell id="arrow5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#d79b00;dashed=1;" edge="1" parent="1" source="mcp-server" target="jadx-plugin">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow5-label" value="HTTP (Port 8650)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="arrow5">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Arrow: APK to JADX -->
+        <mxCell id="arrow6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#b85450;" edge="1" parent="1" source="apk-file" target="jadx-gui">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow6-label" value="Load APK" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="arrow6">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend" value="Legend" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="80" y="660" width="1000" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-1" value="Solid Line: Direct Call&#xa;Dashed Line: HTTP Communication&#xa;Blue: Web UI Layer&#xa;Orange: Agent Layer&#xa;Green: Tools Layer" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;" vertex="1" parent="legend">
+          <mxGeometry x="20" y="40" width="960" height="40" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

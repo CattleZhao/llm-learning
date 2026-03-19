@@ -1,0 +1,207 @@
+<mxfile host="app.diagrams.net" modified="2026-03-19T00:00:00.000Z" agent="5.0" version="24.0.0">
+  <diagram name="Deployment Architecture" id="deployment-architecture">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="Project 6: APK Malicious Behavior Analysis System&#xa;Deployment Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="234.5" y="20" width="700" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- User's Machine (Cloud) -->
+        <mxCell id="user-machine" value="User's Machine&#xa;(Local Development)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=40;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="80" y="100" width="1000" height="520" as="geometry" />
+        </mxCell>
+
+        <!-- User Browser -->
+        <mxCell id="user-browser" value="User Browser&#xa;&#xa;- Chrome/Firefox/Edge&#xa;- Access: localhost:8501&#xa;- Streamlit Web UI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;fontStyle=1;shape=cloud;" vertex="1" parent="user-machine">
+          <mxGeometry x="20" y="60" width="180" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Web UI Container -->
+        <mxCell id="web-ui-container" value="Web UI Container&#xa;(Streamlit)&#xa;&#xa;- app/web.py&#xa;- Port: 8501&#xa;- HTTP Server" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;" vertex="1" parent="user-machine">
+          <mxGeometry x="240" y="60" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Agent Service -->
+        <mxCell id="agent-service" value="Agent Service&#xa;(Python Process)&#xa;&#xa;- APKAnalysisAgent&#xa;- LLMAPKAnalysisAgent&#xa;- Business Logic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;fontStyle=1;" vertex="1" parent="user-machine">
+          <mxGeometry x="480" y="60" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- MCP Server -->
+        <mxCell id="mcp-server" value="MCP Server&#xa;(jadx-mcp-server)&#xa;&#xa;- uv run jadx_mcp_server.py&#xa;- stdio interface&#xa;- Tool registry" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;fontStyle=1;" vertex="1" parent="user-machine">
+          <mxGeometry x="720" y="60" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- JADX-GUI -->
+        <mxCell id="jadx-gui" value="JADX-GUI&#xa;(Desktop App)&#xa;&#xa;- jadx-gui executable&#xa;- Plugin host&#xa;- HTTP server: 8650" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" vertex="1" parent="user-machine">
+          <mxGeometry x="720" y="200" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- JADX Plugin -->
+        <mxCell id="jadx-plugin" value="JADX AI MCP Plugin&#xa;(Embedded in JADX-GUI)&#xa;&#xa;- Tool implementations&#xa;- JADX API wrapper&#xa;- Port: 8650" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1;" vertex="1" parent="user-machine">
+          <mxGeometry x="720" y="340" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Chroma DB -->
+        <mxCell id="chroma-db" value="Chroma DB&#xa;(Vector Database)&#xa;&#xa;- PersistentClient&#xa;- Storage: memory/chroma_db/&#xa;- Embeddings via Ollama" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" vertex="1" parent="user-machine">
+          <mxGeometry x="480" y="200" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- History Storage -->
+        <mxCell id="history-storage" value="History Storage&#xa;(File System)&#xa;&#xa;- memory/apk_history/&#xa;- JSON files&#xa;- APK hash as filename" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" vertex="1" parent="user-machine">
+          <mxGeometry x="480" y="340" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Rule Base -->
+        <mxCell id="rule-base" value="Rule Base&#xa;(File System)&#xa;&#xa;- knowledge_base/raw/rules/&#xa;- package_rules.json&#xa;- url_rules.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;" vertex="1" parent="user-machine">
+          <mxGeometry x="240" y="200" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Uploads Directory -->
+        <mxCell id="uploads-dir" value="Uploads Directory&#xa;(Temporary)&#xa;&#xa;- uploads/&#xa;- APK files&#xa;- Deleted after analysis" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;fontStyle=1;" vertex="1" parent="user-machine">
+          <mxGeometry x="240" y="340" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Ollama Service -->
+        <mxCell id="ollama-service" value="Ollama Service&#xa;(Optional)&#xa;&#xa;- Embedding generation&#xa;- Default: nomic-embed-text&#xa;- Port: 11434" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;fontStyle=1;" vertex="1" parent="user-machine">
+          <mxGeometry x="240" y="460" width="200" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Anthropic API (External) -->
+        <mxCell id="anthropic-api" value="Anthropic API&#xa;(External Service)&#xa;&#xa;- Claude API&#xa;- HTTPS endpoint&#xa;- API Key required" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1;shape=cloud;" vertex="1" parent="user-machine">
+          <mxGeometry x="20" y="200" width="180" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Arrows: Browser to Web UI -->
+        <mxCell id="arrow1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#666666;" edge="1" parent="user-machine" source="user-browser" target="web-ui-container">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow1-label" value="HTTP" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="arrow1">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Arrow: Web UI to Agent -->
+        <mxCell id="arrow2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#666666;" edge="1" parent="user-machine" source="web-ui-container" target="agent-service">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow2-label" value="Python Call" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="arrow2">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Arrow: Agent to MCP -->
+        <mxCell id="arrow3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#d79b00;" edge="1" parent="user-machine" source="agent-service" target="mcp-server">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow3-label" value="stdio (JSON-RPC)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="arrow3">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Arrow: MCP to JADX Plugin -->
+        <mxCell id="arrow4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#d79b00;dashed=1;" edge="1" parent="user-machine" source="mcp-server" target="jadx-plugin">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="820" y="180" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="arrow4-label" value="HTTP (8650)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="arrow4">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Arrow: Agent to Anthropic -->
+        <mxCell id="arrow5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#b85450;dashed=1;" edge="1" parent="user-machine" source="agent-service" target="anthropic-api">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="110" y="180" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="arrow5-label" value="HTTPS" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="arrow5">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Arrow: Agent to Chroma -->
+        <mxCell id="arrow6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#82b366;" edge="1" parent="user-machine" source="agent-service" target="chroma-db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow6-label" value="Store/Query" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="arrow6">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Arrow: Agent to History -->
+        <mxCell id="arrow7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#6c8ebf;" edge="1" parent="user-machine" source="agent-service" target="history-storage">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow7-label" value="Save/Load" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="arrow7">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Arrow: Agent to Rules -->
+        <mxCell id="arrow8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#d6b656;" edge="1" parent="user-machine" source="agent-service" target="rule-base">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="580" y="180" />
+              <mxPoint x="340" y="180" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="arrow8-label" value="Load Rules" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="arrow8">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Arrow: Web UI to Uploads -->
+        <mxCell id="arrow9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#666666;" edge="1" parent="user-machine" source="web-ui-container" target="uploads-dir">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow9-label" value="Upload APK" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="arrow9">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Arrow: Chroma to Ollama -->
+        <mxCell id="arrow10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#9673a6;dashed=1;" edge="1" parent="user-machine" source="chroma-db" target="ollama-service">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="580" y="440" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="arrow10-label" value="Embeddings (11434)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="arrow10">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Production Deployment Box -->
+        <mxCell id="production-box" value="Production Deployment Recommendations" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="80" y="660" width="1000" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="production-content" value="Web UI: Docker containerization&#xa;Agent Service: API service (FastAPI/Flask)&#xa;MCP Server: Independent process management (systemd/supervisord)&#xa;Chroma DB: Persistent storage with backups&#xa;Security: API Key management, HTTPS for production" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;" vertex="1" parent="production-box">
+          <mxGeometry x="20" y="40" width="960" height="60" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
