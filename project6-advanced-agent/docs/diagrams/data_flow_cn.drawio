@@ -1,0 +1,193 @@
+<mxfile host="app.diagrams.net" modified="2026-03-19T00:00:00.000Z" agent="5.0" version="24.0.0">
+  <diagram name="Data Flow" id="data-flow">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="项目 6：APK 恶意行为分析系统&#xa;数据流图" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="234.5" y="20" width="700" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Input: APK File -->
+        <mxCell id="apk-input" value="APK 文件&#xa;&#xa;用户上传&#xa;或提供路径" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="100" width="160" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- JADX Decompilation -->
+        <mxCell id="jadx-decompile" value="JADX 反编译&#xa;&#xa;- 在 JADX-GUI 中打开 APK&#xa;- 提取源代码&#xa;- 解析清单文件" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="300" y="100" width="200" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- MCP Server -->
+        <mxCell id="mcp-server" value="MCP 服务器&#xa;&#xa;- 暴露 JADX 工具&#xa;- 处理工具调用&#xa;- 返回分析数据" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="560" y="100" width="200" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Agent Analysis -->
+        <mxCell id="agent-analysis" value="代理分析&#xa;&#xa;- 调用 MCP 工具&#xa;- 匹配规则&#xa;- 分析模式" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="820" y="100" width="200" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow 1: APK to JADX -->
+        <mxCell id="flow1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#b85450;" edge="1" parent="1" source="apk-input" target="jadx-decompile">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow1-label" value="1. 加载 APK" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow1">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Arrow 2: JADX to MCP -->
+        <mxCell id="flow2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#d79b00;" edge="1" parent="1" source="jadx-decompile" target="mcp-server">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow2-label" value="2. HTTP 通信" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow2">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Arrow 3: MCP to Agent -->
+        <mxCell id="flow3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#d6b656;" edge="1" parent="1" source="mcp-server" target="agent-analysis">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow3-label" value="3. MCP 工具调用（stdio）" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow3">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Analysis Results Storage -->
+        <mxCell id="analysis-results" value="分析结果&#xa;&#xa;- 清单数据&#xa;- 代码路径&#xa;- 网络信息&#xa;- API 调用&#xa;- 字符串" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="820" y="240" width="200" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: Agent to Results -->
+        <mxCell id="flow4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#9673a6;" edge="1" parent="1" source="agent-analysis" target="analysis-results">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow4-label" value="4. 收集数据" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow4">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Chroma DB (Long Memory) -->
+        <mxCell id="chroma-db" value="Chroma DB&#xa;（长期记忆）&#xa;&#xa;- 存储分析向量&#xa;- 相似度搜索&#xa;- 历史模式" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="560" y="240" width="200" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: Results to Chroma -->
+        <mxCell id="flow5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#82b366;dashed=1;" edge="1" parent="1" source="analysis-results" target="chroma-db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow5-label" value="5. 存储向量" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow5">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Rule Base -->
+        <mxCell id="rule-base" value="规则库&#xa;&#xa;- 包名规则&#xa;- URL 黑名单&#xa;- 自定义规则&#xa;- 恶意软件模式" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="300" y="240" width="200" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: Rule Base to Agent -->
+        <mxCell id="flow6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#666666;dashed=1;" edge="1" parent="1" source="rule-base" target="agent-analysis">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="400" y="200" />
+              <mxPoint x="400" y="180" />
+              <mxPoint x="920" y="180" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="flow6-label" value="6. 匹配规则" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow6">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Matching Engine -->
+        <mxCell id="match-engine" value="匹配引擎&#xa;&#xa;- 正则表达式模式&#xa;- URL 匹配&#xa;- 恶意软件签名&#xa;- 风险计算" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="80" y="240" width="200" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: Results to Matching -->
+        <mxCell id="flow7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#d6b656;" edge="1" parent="1" source="analysis-results" target="match-engine">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="920" y="320" />
+              <mxPoint x="920" y="420" />
+              <mxPoint x="180" y="420" />
+              <mxPoint x="180" y="380" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="flow7-label" value="7. 模式匹配" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow7">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Final Report -->
+        <mxCell id="final-report" value="安全报告&#xa;&#xa;- 风险等级&#xa;- 发现列表&#xa;- 缓解措施&#xa;- 建议" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="420" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: Matching to Report -->
+        <mxCell id="flow8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#b85450;" edge="1" parent="1" source="match-engine" target="final-report">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow8-label" value="8. 生成报告" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow8">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- History Manager -->
+        <mxCell id="history-manager" value="历史管理器&#xa;&#xa;- 保存分析&#xa;- 加载历史&#xa;- 跟踪 Token" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="300" y="420" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: Report to History -->
+        <mxCell id="flow9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#6c8ebf;" edge="1" parent="1" source="final-report" target="history-manager">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow9-label" value="9. 保存历史" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow9">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- User Display -->
+        <mxCell id="user-display" value="用户显示&#xa;&#xa;- Web 界面&#xa;- Markdown 报告&#xa;- 下载选项" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="560" y="420" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: History to Display -->
+        <mxCell id="flow10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#9673a6;" edge="1" parent="1" source="history-manager" target="user-display">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow10-label" value="10. 显示" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fillColor=#ffffff;" vertex="1" connectable="0" parent="flow10">
+          <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend-box" value="数据流图例" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="80" y="580" width="940" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-content" value="实线红色：APK 输入路径&#xa;实线橙黄色：分析路径&#xa;实线绿色：记忆存储&#xa;虚线：规则匹配与引用&#xa;数字 1-10：流程顺序" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;" vertex="1" parent="legend-box">
+          <mxGeometry x="20" y="40" width="900" height="60" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
