@@ -5,6 +5,13 @@ Agents 模块
 """
 from agents.base import BaseAgent, AgentResponse, AgentState, ToolExecutor
 
+# 传统 Agent
+from agents.apk_agent import APKAnalysisAgent, create_apk_agent
+from agents.apk_agent_llm import LLMAPKAnalysisAgent, create_llm_agent
+
+# LangChain Agent
+from agents.langchain_agent import LangChainAPKAgent, create_langchain_agent
+
 # 上下文压缩相关
 from agents.advanced_compressor import (
     create_advanced_compressor,
@@ -19,6 +26,14 @@ __all__ = [
     "AgentResponse",
     "AgentState",
     "ToolExecutor",
+    # 传统 Agent
+    "APKAnalysisAgent",
+    "create_apk_agent",
+    "LLMAPKAnalysisAgent",
+    "create_llm_agent",
+    # LangChain Agent
+    "LangChainAPKAgent",
+    "create_langchain_agent",
     # 高级压缩
     "create_advanced_compressor",
     "AdvancedContextCompressor",
