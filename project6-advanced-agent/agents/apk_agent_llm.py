@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional, Callable
 # 导入拆分后的模块
 from .history_manager import HistoryManager
 from .report_parser import ReportParser
-from .context_compressor import create_context_compressor, ContextCompressor
+from .advanced_compressor import create_advanced_compressor, AdvancedContextCompressor
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -76,7 +76,7 @@ class LLMAPKAnalysisAgent(BaseAgent):
         anthropic_api_key: Optional[str] = None,
         model: str = "claude-sonnet-4-20250514",
         system_prompt: Optional[str] = None,
-        on_status_update: Optional[Callable[[str], None]] = None
+        on_status_update: Optional[Callable[[str], None]] = None,
     ):
         super().__init__(
             name="APK 安全分析专家 (LLM 驱动)",
@@ -138,14 +138,16 @@ class LLMAPKAnalysisAgent(BaseAgent):
         # 报告解析器
         self.report_parser = ReportParser()
 
-        # 初始化上下文压缩器
-        self.context_compressor = create_context_compressor(
-            history_window_size=5,  # 保留最近 5 轮对话
-            tool_result_threshold=2000,  # 超过 2000 字符就摘要
-            max_tool_result_size=10000,  # 最大 10KB
-            enable_similar_samples=True,  # 启用相似样本
-            max_similar_samples=1  # 最多 1 个样本
+        # 初始化高级上下文压缩器（磁盘缓存 + Sonnet 摘要 + 占位符）
+        self.context_compressor = create_advanced_compressor(
+            history_window_size=5,
+            use_llm_summarizer=True,
+            llm_model="claude-sonnet-4-20250514",  # 用 Sonnet 做摘要
+            enable_disk_cache=True,
+            use_placeholders=True,
+            cache_dir=None  # 使用默认缓存目录 memory/tool_cache/
         )
+        self.on_status_update("🔄 高级压缩器已启用 (缓存 + Sonnet摘要 + 占位符)")
 
         # 初始化长记忆系统
         self.vector_store = get_vector_store()
@@ -504,10 +506,13 @@ class LLMAPKAnalysisAgent(BaseAgent):
                 # 执行工具
                 tool_result = self.tool_executor.execute(tool_name, tool_input)
 
-                # 使用压缩器处理工具结果
-                result_str, was_summarized = self.context_compressor.compress_tool_result(
-                    tool_name, tool_result
+                # 使用压缩器处理工具结果（保存到磁盘 + 生成摘要）
+                result_str, cache_id = self.context_compressor.compress_tool_result(
+                    tool_name=tool_name,
+                    tool_input=tool_input,
+                    tool_result=tool_result
                 )
+                was_summarized = cache_id is not None
 
                 # 保存完整结果到 current_analysis
                 self.current_analysis[tool_name] = tool_result
