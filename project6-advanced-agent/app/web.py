@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from agents.apk_agent import create_apk_agent
 from agents.apk_agent_llm import create_llm_agent
+from agents.langchain_agent import create_langchain_agent
 from knowledge_base import get_rule_loader
 
 # 页面配置
@@ -322,12 +323,15 @@ def main():
         # Agent 类型选择
         agent_type = st.radio(
             "Agent 类型",
-            ["硬编码流程", "LLM 驱动"],
+            ["硬编码流程", "LLM 驱动", "LangChain"],
             horizontal=True,
-            help="硬编码流程: 固定分析步骤 | LLM 驱动: AI 自主决定调用哪些工具"
+            help="硬编码: 固定步骤 | LLM驱动: AI自主决策 | LangChain: 自动循环管理"
         )
 
-        # LLM System Prompt 配置（仅 LLM 驱动模式显示）
+        # 初始化自定义 prompt（所有模式共用）
+        custom_system_prompt = None
+
+        # LLM System Prompt 配置（LLM 驱动模式显示）
         if agent_type == "LLM 驱动":
             with st.expander("📝 自定义 System Prompt", expanded=False):
                 st.info("""
@@ -345,6 +349,18 @@ def main():
                     height=300,
                     help="输入自定义的 System Prompt，包含分析步骤和输出格式"
                 )
+        elif agent_type == "LangChain":
+            # LangChain 模式提示
+            with st.expander("📝 LangChain Agent 说明", expanded=False):
+                st.info("""
+                **LangChain Agent** 使用内置的专业分析 Prompt：
+
+                - 自动管理 APK 分析流程（获取 Manifest → 分析权限 → 扫描代码 → 检查网络 → 检测 API → 提取字符串 → 匹配规则）
+                - 自动循环管理，无需手动控制迭代次数
+                - 智能停止判断（完成所有分析后自动结束）
+
+                如需自定义 Prompt，请使用 "LLM 驱动" 模式。
+                """)
 
                 # 显示输出格式说明
                 st.markdown("""
@@ -542,8 +558,15 @@ def main():
 
                 with st.spinner("正在分析 APK..."):
                     # 创建 Agent - 根据用户选择
-                    if agent_type == "LLM 驱动":
-                        # 使用自定义 prompt（如果提供了）
+                    if agent_type == "LangChain":
+                        # LangChain Agent（自动循环管理）
+                        agent = create_langchain_agent(
+                            mcp_server_path=mcp_server_path,
+                            on_status_update=update_status
+                        )
+                        update_status("🔄 使用 LangChain Agent (自动循环管理)")
+                    elif agent_type == "LLM 驱动":
+                        # LLM 驱动 Agent（手动循环）
                         system_prompt = custom_system_prompt if custom_system_prompt else None
                         agent = create_llm_agent(
                             mcp_server_path=mcp_server_path,
@@ -554,6 +577,7 @@ def main():
                         if system_prompt:
                             update_status("📝 使用自定义 System Prompt")
                     else:
+                        # 硬编码流程 Agent
                         agent = create_apk_agent(
                             mcp_server_path=mcp_server_path,
                             jadx_gui_path=jadx_gui_path if jadx_gui_path else None,
