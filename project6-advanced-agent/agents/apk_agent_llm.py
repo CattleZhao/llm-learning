@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Callable
 # 导入拆分后的模块
 from .history_manager import HistoryManager
 from .report_parser import ReportParser
+from .context_compressor import create_context_compressor, ContextCompressor
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -127,9 +128,6 @@ class LLMAPKAnalysisAgent(BaseAgent):
         self.current_analysis: Dict[str, Any] = {}
         self._apk_path: Optional[str] = None
 
-        # 工具结果大小限制（字符数）
-        self.max_tool_result_size = 50000  # 50KB
-
         # Token 使用统计
         self.total_input_tokens = 0
         self.total_output_tokens = 0
@@ -139,6 +137,15 @@ class LLMAPKAnalysisAgent(BaseAgent):
 
         # 报告解析器
         self.report_parser = ReportParser()
+
+        # 初始化上下文压缩器
+        self.context_compressor = create_context_compressor(
+            history_window_size=5,  # 保留最近 5 轮对话
+            tool_result_threshold=2000,  # 超过 2000 字符就摘要
+            max_tool_result_size=10000,  # 最大 10KB
+            enable_similar_samples=True,  # 启用相似样本
+            max_similar_samples=1  # 最多 1 个样本
+        )
 
         # 初始化长记忆系统
         self.vector_store = get_vector_store()
@@ -192,24 +199,25 @@ class LLMAPKAnalysisAgent(BaseAgent):
             last_analysis_time = history.get("timestamp", "")
             self.on_status_update(f"📋 加载历史分析记录 (上次分析: {last_analysis_time})")
 
-        # 检索相似历史分析
+        # 检索相似历史分析（按需）
         if not history:
-            similar = self.vector_store.search_similar(
-                query=f"{Path(apk_path).name} APK analysis",
-                n_results=3
+            apk_name = Path(apk_path).name
+            should_inject = self.context_compressor.should_inject_similar_samples(
+                apk_name=apk_name,
+                has_history=bool(history)
             )
 
-            if similar:
-                similar_context = "\n\n".join([
-                    f"相似样本 {i+1}:\n包名: {s['metadata'].get('package', 'unknown')}\n"
-                    f"风险等级: {s['metadata'].get('risk_level', 'unknown')}\n"
-                    f"摘要: {s.get('content', '')[:200]}"
-                    for i, s in enumerate(similar)
-                ])
-                self.on_status_update(f"📚 找到 {len(similar)} 个相似历史样本")
+            if should_inject:
+                similar = self.vector_store.search_similar(
+                    query=f"{apk_name} APK analysis",
+                    n_results=3  # 检索 3 个，但压缩器只会用 1 个
+                )
 
-                # 注入到 System Prompt
-                self.system_prompt += f"\n\n参考历史分析：\n{similar_context}\n请参考这些相似样本的分析方式。"
+                if similar:
+                    similar_context = self.context_compressor.format_similar_samples(similar)
+                    self.on_status_update(f"📚 找到 {len(similar)} 个相似历史样本")
+                    # 注入到 System Prompt
+                    self.system_prompt += f"\n\n{similar_context}\n请参考这些相似样本的分析方式。"
 
         self.on_status_update(f"📁 开始分析: {Path(apk_path).name}")
 
@@ -336,6 +344,13 @@ class LLMAPKAnalysisAgent(BaseAgent):
             iteration += 1
 
             logger.info(f"\n[迭代 {iteration}] 请求 Claude 决策...")
+
+            # 压缩对话历史（滑动窗口）
+            if iteration > 1:
+                original_count = len(messages)
+                messages = self.context_compressor.compress_messages(messages, iteration)
+                if len(messages) < original_count:
+                    logger.info(f"  对话历史压缩: {original_count} -> {len(messages)} 条消息")
 
             # 调用 Claude API
             response = self.client.messages.create(
@@ -489,15 +504,13 @@ class LLMAPKAnalysisAgent(BaseAgent):
                 # 执行工具
                 tool_result = self.tool_executor.execute(tool_name, tool_input)
 
-                # 截断过大的结果以避免超出 token 限制
-                result_str = str(tool_result)
-                if len(result_str) > self.max_tool_result_size:
-                    logger.warning(f"工具 {tool_name} 结果过大 ({len(result_str)} 字符)，截断到 {self.max_tool_result_size}")
-                    result_str = result_str[:self.max_tool_result_size] + "\n\n... (结果已截断)"
-                    # 保存完整结果到 current_analysis，但只传递摘要给 LLM
-                    self.current_analysis[tool_name] = tool_result
-                else:
-                    self.current_analysis[tool_name] = tool_result
+                # 使用压缩器处理工具结果
+                result_str, was_summarized = self.context_compressor.compress_tool_result(
+                    tool_name, tool_result
+                )
+
+                # 保存完整结果到 current_analysis
+                self.current_analysis[tool_name] = tool_result
 
                 # 格式化结果摘要
                 result_summary = ToolFormatter.format_result_summary(tool_name, tool_result)
