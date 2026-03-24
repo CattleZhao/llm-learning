@@ -350,17 +350,23 @@ def main():
                     help="输入自定义的 System Prompt，包含分析步骤和输出格式"
                 )
         elif agent_type == "LangChain":
-            # LangChain 模式提示
-            with st.expander("📝 LangChain Agent 说明", expanded=False):
+            # LangChain 模式 - 支持自定义 prompt
+            with st.expander("📝 自定义 System Prompt (可选)", expanded=False):
                 st.info("""
-                **LangChain Agent** 使用内置的专业分析 Prompt：
-
-                - 自动管理 APK 分析流程（获取 Manifest → 分析权限 → 扫描代码 → 检查网络 → 检测 API → 提取字符串 → 匹配规则）
-                - 自动循环管理，无需手动控制迭代次数
-                - 智能停止判断（完成所有分析后自动结束）
-
-                如需自定义 Prompt，请使用 "LLM 驱动" 模式。
+                **LangChain Agent** 支持自定义 System Prompt。
+                留空则使用内置的专业分析 Prompt。
                 """)
+
+                # 加载 LangChain 默认 prompt 作为占位符
+                from agents.langchain_agent import ANALYST_SYSTEM_PROMPT
+
+                langchain_custom_prompt = st.text_area(
+                    "System Prompt",
+                    value="",
+                    placeholder=ANALYST_SYSTEM_PROMPT,
+                    height=300,
+                    help="输入自定义的 System Prompt，留空使用默认"
+                )
 
                 # 显示输出格式说明
                 st.markdown("""
@@ -560,11 +566,15 @@ def main():
                     # 创建 Agent - 根据用户选择
                     if agent_type == "LangChain":
                         # LangChain Agent（自动循环管理）
+                        system_prompt = langchain_custom_prompt if langchain_custom_prompt else None
                         agent = create_langchain_agent(
                             mcp_server_path=mcp_server_path,
+                            system_prompt=system_prompt,
                             on_status_update=update_status
                         )
                         update_status("🔄 使用 LangChain Agent (自动循环管理)")
+                        if system_prompt:
+                            update_status("📝 使用自定义 System Prompt")
                     elif agent_type == "LLM 驱动":
                         # LLM 驱动 Agent（手动循环）
                         system_prompt = custom_system_prompt if custom_system_prompt else None

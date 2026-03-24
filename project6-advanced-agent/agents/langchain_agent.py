@@ -145,6 +145,7 @@ class LangChainAPKAgent(BaseAgent):
         mcp_server_path: str,
         anthropic_api_key: Optional[str] = None,
         model: str = "claude-sonnet-4-20250514",
+        system_prompt: Optional[str] = None,  # 支持自定义 prompt
         on_status_update: Optional[Callable[[str], None]] = None,
     ):
         super().__init__(
@@ -161,6 +162,7 @@ class LangChainAPKAgent(BaseAgent):
         settings = get_settings()
         self.api_key = anthropic_api_key or settings.anthropic_api_key
         self.model = model
+        self.system_prompt = system_prompt or ANALYST_SYSTEM_PROMPT  # 自定义或默认
 
         # 初始化 LLM
         self.llm = ChatAnthropic(
@@ -235,7 +237,7 @@ class LangChainAPKAgent(BaseAgent):
             agent_graph = create_agent(
                 model=self.llm,
                 tools=langchain_tools,
-                system_prompt=ANALYST_SYSTEM_PROMPT,
+                system_prompt=self.system_prompt,  # 使用自定义或默认 prompt
                 debug=False  # 设为 True 可看到详细执行过程
             )
 
@@ -353,6 +355,7 @@ def create_langchain_agent(
     mcp_server_path: str,
     anthropic_api_key: Optional[str] = None,
     model: str = "claude-sonnet-4-20250514",
+    system_prompt: Optional[str] = None,
     on_status_update: Optional[Callable[[str], None]] = None
 ) -> LangChainAPKAgent:
     """创建 LangChain 驱动的 APK 分析 Agent"""
@@ -360,5 +363,6 @@ def create_langchain_agent(
         mcp_server_path=mcp_server_path,
         anthropic_api_key=anthropic_api_key,
         model=model,
+        system_prompt=system_prompt,  # 传递自定义 prompt
         on_status_update=on_status_update
     )
