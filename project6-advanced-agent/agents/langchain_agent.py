@@ -16,6 +16,7 @@ from langchain.agents import create_agent
 from langchain_core.messages import SystemMessage
 
 from agents.base import BaseAgent, AgentResponse
+from agents.advanced_compressor import create_advanced_compressor, AdvancedContextCompressor
 from tools.mcp.jadx_client_stdio import StdioMCPClient
 from tools.llm_tools import ToolExecutor
 from knowledge_base import get_rule_loader
@@ -36,17 +37,20 @@ class MCPToolAdapter(BaseTool):
     tool_executor: Optional[ToolExecutor] = None
     mcp_tool_name: Optional[str] = None
     args_schema: Any = None  # Pydantic 模型，可选
+    compressor: Optional[AdvancedContextCompressor] = None  # 上下文压缩器
 
     def __init__(
         self,
         name: str,
         description: str,
         tool_executor: ToolExecutor,
+        compressor: Optional[AdvancedContextCompressor] = None,
         **kwargs
     ):
         super().__init__(name=name, description=description, **kwargs)
         self.tool_executor = tool_executor
         self.mcp_tool_name = name
+        self.compressor = compressor
 
     def _run(self, **kwargs) -> str:
         """执行 MCP 工具"""
@@ -55,6 +59,18 @@ class MCPToolAdapter(BaseTool):
 
         try:
             result = self.tool_executor.execute(self.mcp_tool_name, kwargs)
+
+            # 如果有压缩器，压缩工具结果
+            if self.compressor:
+                compressed_result, cache_id = self.compressor.compress_tool_result(
+                    tool_name=self.mcp_tool_name,
+                    tool_input=kwargs,
+                    tool_result=result
+                )
+                if cache_id:
+                    logger.info(f"  [{self.mcp_tool_name}] 结果已压缩并缓存: {cache_id}")
+                return compressed_result
+
             return str(result)
         except Exception as e:
             logger.error(f"MCP 工具执行失败: {self.name}, {e}")
@@ -63,7 +79,8 @@ class MCPToolAdapter(BaseTool):
 
 def create_langchain_tools(
     tool_executor: ToolExecutor,
-    tool_definitions: List[Dict[str, Any]]
+    tool_definitions: List[Dict[str, Any]],
+    compressor: Optional[AdvancedContextCompressor] = None
 ) -> List[BaseTool]:
     """从 MCP 工具定义创建 LangChain 工具"""
     langchain_tools = []
@@ -72,7 +89,8 @@ def create_langchain_tools(
         tool = MCPToolAdapter(
             name=tool_def["name"],
             description=tool_def.get("description", ""),
-            tool_executor=tool_executor
+            tool_executor=tool_executor,
+            compressor=compressor  # 传递压缩器
         )
         langchain_tools.append(tool)
 
@@ -191,6 +209,17 @@ class LangChainAPKAgent(BaseAgent):
             logger=logger
         )
 
+        # 初始化高级上下文压缩器
+        self.context_compressor = create_advanced_compressor(
+            history_window_size=5,
+            use_llm_summarizer=True,
+            llm_model="claude-sonnet-4-20250514",  # 用 Sonnet 做摘要
+            enable_disk_cache=True,
+            use_placeholders=True,
+            cache_dir=None  # 使用默认缓存目录 memory/tool_cache/
+        )
+        self.on_status_update("🔄 高级压缩器已启用 (缓存 + Sonnet摘要)")
+
         # 当前分析状态
         self.current_analysis: Dict[str, Any] = {}
         self._apk_path: Optional[str] = None
@@ -230,7 +259,11 @@ class LangChainAPKAgent(BaseAgent):
             # 创建 LangChain 工具
             from tools.llm_tools import ToolDefinitions
             tool_defs = ToolDefinitions.get_all_tools()
-            langchain_tools = create_langchain_tools(self.tool_executor, tool_defs)
+            langchain_tools = create_langchain_tools(
+                self.tool_executor,
+                tool_defs,
+                compressor=self.context_compressor  # 传递压缩器
+            )
 
             # 使用新版 create_agent API
             self.on_status_update("🤖 创建 LangChain Agent...")
